@@ -68,7 +68,7 @@ export default async function AdminDashboard() {
           {recentOrders.length === 0 ? (
             <p className="text-center py-10 text-gray-400">No orders yet</p>
           ) : (
-            recentOrders.map((order) => (
+            recentOrders.map((order: typeof recentOrders[0]) => (
               <Link
                 key={order.id}
                 href={`/admin/orders/${order.id}`}
