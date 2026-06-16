@@ -77,7 +77,7 @@ export default async function AdminDashboard() {
                 <div>
                   <p className="font-medium text-gray-900 text-sm">{order.orderNumber}</p>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    {order.customerName} · {order.items.map(i => i.productName).join(", ").slice(0, 40)}
+                    {order.customerName} · {order.items.map((i: { productName: string }) => i.productName).join(", ").slice(0, 40)}
                   </p>
                 </div>
                 <div className="text-right">
