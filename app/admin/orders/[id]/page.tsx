@@ -80,7 +80,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
           <h2 className="font-semibold text-gray-900">Order Items</h2>
         </div>
         <div className="divide-y divide-gray-50">
-          {order.items.map((item) => {
+          {order.items.map((item: { id: string; productName: string; quantity: number; unitPrice: unknown; totalPrice: unknown; customizationData: unknown }) => {
             const customData = item.customizationData as Record<string, string>;
             return (
               <div key={item.id} className="px-5 py-4">
