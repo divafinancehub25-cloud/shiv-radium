@@ -1,0 +1,235 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  CUSTOMER
+}
+
+enum FieldType {
+  TEXT
+  TEXTAREA
+  NUMBER
+  EMAIL
+  PHONE
+  DATE
+  DROPDOWN
+  RADIO
+  CHECKBOX
+  COLOR_PICKER
+  IMAGE_UPLOAD
+  FILE_UPLOAD
+  QUANTITY
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  READY
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+// ─── Category ─────────────────────────────────────────────────────────────────
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?
+  image       String?
+  icon        String?
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  products Product[]
+
+  @@index([slug])
+  @@index([isActive])
+}
+
+// ─── Product ──────────────────────────────────────────────────────────────────
+
+model Product {
+  id           String   @id @default(cuid())
+  categoryId   String
+  category     Category @relation(fields: [categoryId], references: [id])
+  name         String
+  slug         String   @unique
+  description  String?
+  basePrice    Decimal  @db.Decimal(10, 2)
+  images       String[]
+  isActive     Boolean  @default(true)
+  isFeatured   Boolean  @default(false)
+  sortOrder    Int      @default(0)
+  deliveryDays Int      @default(5)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  fields     ProductField[]
+  orderItems OrderItem[]
+
+  @@index([categoryId])
+  @@index([slug])
+  @@index([isActive])
+}
+
+// ─── Dynamic Field System ─────────────────────────────────────────────────────
+// Admin creates fields per product — no code change needed to add new products
+
+model ProductField {
+  id          String    @id @default(cuid())
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  label       String
+  fieldKey    String
+  type        FieldType
+  placeholder String?
+  helpText    String?
+  isRequired  Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  options     FieldOption[]
+
+  @@unique([productId, fieldKey])
+  @@index([productId])
+}
+
+model FieldOption {
+  id       String       @id @default(cuid())
+  fieldId  String
+  field    ProductField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  label    String
+  value    String
+  price    Decimal?     @db.Decimal(10, 2)
+  sortOrder Int         @default(0)
+
+  @@index([fieldId])
+}
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  name      String?
+  email     String?  @unique
+  phone     String   @unique
+  role      Role     @default(CUSTOMER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+
+  @@index([phone])
+  @@index([email])
+}
+
+// ─── OTP ──────────────────────────────────────────────────────────────────────
+
+model OtpToken {
+  id        String   @id @default(cuid())
+  phone     String
+  otp       String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+}
+
+// ─── Order ────────────────────────────────────────────────────────────────────
+
+model Order {
+  id            String        @id @default(cuid())
+  orderNumber   String        @unique
+  userId        String?
+  user          User?         @relation(fields: [userId], references: [id])
+  customerName  String
+  customerPhone String
+  customerEmail String?
+  address       String
+  city          String
+  state         String
+  pinCode       String
+  subtotal      Decimal       @db.Decimal(10, 2)
+  shippingCharge Decimal      @default(0) @db.Decimal(10, 2)
+  totalAmount   Decimal       @db.Decimal(10, 2)
+  status        OrderStatus   @default(PENDING)
+  paymentStatus PaymentStatus @default(PENDING)
+  razorpayOrderId String?
+  razorpayPaymentId String?
+  giftWrapping  Boolean       @default(false)
+  giftMessage   String?
+  deliveryDate  DateTime?
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  items OrderItem[]
+
+  @@index([orderNumber])
+  @@index([customerPhone])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ─── Order Item ───────────────────────────────────────────────────────────────
+
+model OrderItem {
+  id              String   @id @default(cuid())
+  orderId         String
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product  @relation(fields: [productId], references: [id])
+  productName     String
+  quantity        Int      @default(1)
+  unitPrice       Decimal  @db.Decimal(10, 2)
+  totalPrice      Decimal  @db.Decimal(10, 2)
+  customizationData Json
+  uploadedFiles   String[]
+  createdAt       DateTime @default(now())
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+// ─── Uploaded Files ───────────────────────────────────────────────────────────
+
+model UploadedFile {
+  id          String   @id @default(cuid())
+  url         String
+  publicId    String
+  fileName    String?
+  fileSize    Int?
+  mimeType    String?
+  uploadedAt  DateTime @default(now())
+}
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+model Setting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+
+  @@index([key])
+}

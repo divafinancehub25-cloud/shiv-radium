@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -11,7 +15,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "react-jsx",
+    "jsx": "preserve",
     "incremental": true,
     "plugins": [
       {
@@ -19,7 +23,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": [
+        "./*"
+      ]
     }
   },
   "include": [
@@ -30,5 +36,40 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "app/(auth)",
+    "app/(diva-admin)",
+    "app/(diva-auth)",
+    "app/(diva-dashboard)",
+    "app/diva-admin",
+    "app/diva-app-admin",
+    "app/diva-app",
+    "app/diva",
+    "app/admin/bookings",
+    "app/admin/vehicles",
+    "app/admin/drivers",
+    "app/admin/pricing",
+    "app/admin/customers",
+    "app/admin/invoices",
+    "app/admin/audit-logs",
+    "actions/booking.ts",
+    "actions/vehicle.ts",
+    "actions/driver.ts",
+    "actions/pricing.ts",
+    "actions/auth.ts",
+    "actions/diva",
+    "components/admin",
+    "components/diva",
+    "hooks/diva",
+    "lib/auth.ts",
+    "lib/prisma.ts",
+    "lib/booking-number.ts",
+    "lib/pricing.ts",
+    "lib/validators",
+    "lib/audit.ts",
+    "lib/diva",
+    "types/diva",
+    "proxy.ts"
+  ]
 }
