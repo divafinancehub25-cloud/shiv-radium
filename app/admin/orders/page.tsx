@@ -85,7 +85,7 @@ export default async function AdminOrdersPage({
                     <p className="text-gray-400 text-xs">{order.customerPhone}</p>
                   </td>
                   <td className="px-5 py-3.5 text-gray-600 max-w-[180px]">
-                    <p className="truncate">{order.items.map(i => `${i.productName} ×${i.quantity}`).join(", ")}</p>
+                    <p className="truncate">{order.items.map((i: { productName: string; quantity: number }) => `${i.productName} ×${i.quantity}`).join(", ")}</p>
                   </td>
                   <td className="px-5 py-3.5 font-semibold text-gray-900">
                     ₹{Number(order.totalAmount).toLocaleString("en-IN")}
