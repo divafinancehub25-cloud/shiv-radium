@@ -1,23 +1,19 @@
-import { Pool } from "pg";
+import { Pool, neonConfig } from "@neondatabase/serverless";
 import { PrismaNeon } from "@prisma/adapter-neon";
-import { neonConfig } from "@neondatabase/serverless";
 import { PrismaClient } from "@prisma/client";
 import ws from "ws";
 
-// Use ws for WebSocket support in Node.js
 neonConfig.webSocketConstructor = ws;
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
 function createPrismaClient() {
-  // Use native pg Pool with DIRECT_URL (bypasses pgBouncer, supports transactions)
-  const pool = new Pool({
-    connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-    max: 3,
-    idleTimeoutMillis: 30000,
-  });
-  const adapter = new PrismaNeon(pool as never);
+  const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error("DATABASE_URL environment variable is not set");
+  }
+  const pool = new Pool({ connectionString });
+  const adapter = new PrismaNeon(pool);
   return new PrismaClient({ adapter });
 }
 
