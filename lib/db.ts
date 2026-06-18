@@ -1,4 +1,3 @@
-import { neon } from "@neondatabase/serverless";
 import { PrismaNeonHttp } from "@prisma/adapter-neon";
 import { PrismaClient } from "@prisma/client";
 
@@ -6,9 +5,8 @@ let _db: PrismaClient | undefined;
 
 function createClient(): PrismaClient {
   const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL is not set");
-  const sql = neon(url);
-  const adapter = new PrismaNeonHttp(sql);
+  if (!url) throw new Error("DATABASE_URL is not set in environment variables");
+  const adapter = new PrismaNeonHttp(url);
   return new PrismaClient({ adapter });
 }
 
