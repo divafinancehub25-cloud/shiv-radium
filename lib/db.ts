@@ -1,18 +1,16 @@
 import { neon } from "@neondatabase/serverless";
-import { PrismaNeonHTTP } from "@prisma/adapter-neon";
+import { PrismaNeonHttp } from "@prisma/adapter-neon";
 import { PrismaClient } from "@prisma/client";
 
+let _db: PrismaClient | undefined;
+
 function createClient(): PrismaClient {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    throw new Error("DATABASE_URL environment variable is missing");
-  }
-  const sql = neon(databaseUrl);
-  const adapter = new PrismaNeonHTTP(sql);
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL is not set");
+  const sql = neon(url);
+  const adapter = new PrismaNeonHttp(sql);
   return new PrismaClient({ adapter });
 }
-
-let _db: PrismaClient | undefined;
 
 export const db = new Proxy({} as PrismaClient, {
   get(_target, prop: string) {
