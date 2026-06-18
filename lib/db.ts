@@ -1,4 +1,3 @@
-import "dotenv/config";
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import { PrismaNeon } from "@prisma/adapter-neon";
 import { PrismaClient } from "@prisma/client";
@@ -6,18 +5,22 @@ import ws from "ws";
 
 neonConfig.webSocketConstructor = ws;
 
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+let _client: PrismaClient | null = null;
 
-function createPrismaClient() {
-  const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error("DATABASE_URL environment variable is not set. Check your .env file.");
-  }
-  const pool = new Pool({ connectionString });
+function getClient(): PrismaClient {
+  if (_client) return _client;
+  const url = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL is not set in environment variables");
+  const pool = new Pool({ connectionString: url });
   const adapter = new PrismaNeon(pool);
-  return new PrismaClient({ adapter });
+  _client = new PrismaClient({ adapter });
+  return _client;
 }
 
-export const db = globalForPrisma.prisma ?? createPrismaClient();
-
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = db;
+// Lazy proxy — env vars are read at query time, not at module load time
+export const db = new Proxy({} as PrismaClient, {
+  get(_target, prop: string) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (getClient() as any)[prop];
+  },
+});
