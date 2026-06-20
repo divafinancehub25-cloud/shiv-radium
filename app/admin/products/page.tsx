@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import Link from "next/link";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, Upload } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -17,9 +17,14 @@ export default async function AdminProductsPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Products</h1>
-        <Link href="/admin/products/new" className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-colors">
-          <Plus className="w-4 h-4" /> Add Product
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/admin/products/bulk" className="flex items-center gap-2 border border-orange-500 text-orange-500 hover:bg-orange-50 text-sm font-medium px-4 py-2.5 rounded-xl transition-colors">
+            <Upload className="w-4 h-4" /> Bulk Upload
+          </Link>
+          <Link href="/admin/products/new" className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-colors">
+            <Plus className="w-4 h-4" /> Add Product
+          </Link>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
