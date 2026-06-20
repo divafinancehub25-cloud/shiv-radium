@@ -41,3 +41,33 @@ yarn-error.log*
 next-env.d.ts
 
 /app/generated/prisma
+
+# Old DIVA/BMW project files — keep local only
+/actions/
+/app/(auth)/
+/app/(diva-admin)/
+/app/(diva-auth)/
+/app/(diva-dashboard)/
+/app/api/auth/
+/app/api/diva/
+/app/api/webhooks/
+/app/diva-admin/
+/app/diva-app-admin/
+/app/diva-app/
+/app/diva/
+/components/
+/hooks/
+/lib/audit.ts
+/lib/auth.config.ts
+/lib/auth.ts
+/lib/booking-number.ts
+/lib/diva/
+/lib/pricing.ts
+/lib/prisma.ts
+/lib/utils.ts
+/lib/validators/
+/proxy.ts
+/types/
+/prisma/seed-debug.mjs
+/prisma/seed.mjs
+/.claude/
