@@ -55,7 +55,11 @@ next-env.d.ts
 /app/diva-app-admin/
 /app/diva-app/
 /app/diva/
-/components/
+/components/admin/
+/components/auth/
+/components/diva/
+/components/ui/
+/components/public/
 /hooks/
 /lib/audit.ts
 /lib/auth.config.ts
