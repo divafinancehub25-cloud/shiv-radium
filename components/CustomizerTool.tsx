@@ -36,7 +36,7 @@ type Product = {
   slug: string;
   basePrice: number;
   fields: Field[];
-  category: { name: string; icon: string };
+  category: { name: string; icon: string | null };
 };
 
 export default function CustomizerTool({ product }: { product: Product }) {

@@ -24,7 +24,7 @@ async function main() {
   const dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) throw new Error("DATABASE_URL not set");
 
-  const adapter = new PrismaNeonHttp(dbUrl);
+  const adapter = new PrismaNeonHttp(dbUrl, {});
   const prisma = new PrismaClient({ adapter });
 
   console.log("Seeding Shiv Radium database...");

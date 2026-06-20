@@ -9,6 +9,7 @@ datasource db {
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
 enum Role {
+  SUPER_ADMIN
   ADMIN
   CUSTOMER
 }
@@ -128,16 +129,40 @@ model FieldOption {
 // ─── User ─────────────────────────────────────────────────────────────────────
 
 model User {
-  id        String   @id @default(cuid())
-  name      String?
-  email     String?  @unique
-  phone     String   @unique
-  role      Role     @default(CUSTOMER)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  phone         String    @unique
+  passwordHash  String?
+  image         String?
+  emailVerified DateTime?
+  role          Role      @default(CUSTOMER)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   orders Order[]
+
+  // DIVA relations
+  divaProfile             DivaProfile?
+  divaKYC                 DivaKYCSubmission?
+  divaEmailTokens         DivaEmailVerifyToken[]
+  divaPasswordTokens      DivaPasswordResetToken[]
+  divaLoginHistory        DivaLoginHistory[]
+  divaDevices             DivaDevice[]
+  divaTwoFactor           DivaTwoFactorAuth?
+  divaPortfolio           DivaPortfolio?
+  divaDeposits            DivaDeposit[]
+  divaDepositsReviewed    DivaDeposit[]            @relation("DivaDepositReviewer")
+  divaWalletsCreated      DivaDepositWallet[]      @relation("DivaWalletCreator")
+  divaLedgerEntries       DivaLedgerEntry[]        @relation("DivaLedgerCreator")
+  divaWithdrawals         DivaWithdrawal[]         @relation("DivaUserWithdrawals")
+  divaWithdrawalsReviewed DivaWithdrawal[]         @relation("DivaWithdrawalReviewer")
+  divaReferralsGiven      DivaReferral[]           @relation("DivaReferrer")
+  divaReferralReceived    DivaReferral?            @relation("DivaReferred")
+  divaNotifications       DivaNotification[]
+  divaAuditLogs           DivaAuditLog[]           @relation("DivaAuditActor")
+  divaBalanceAdjustments  DivaBalanceAdjustment[]  @relation("DivaAdjCreator")
 
   @@index([phone])
   @@index([email])
@@ -232,4 +257,551 @@ model Setting {
   value String
 
   @@index([key])
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DIVA GROWTH CAPITAL — separate fintech module (do NOT mix with BMW/OTG)
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ─── DIVA Enums ───────────────────────────────────────────────────────────────
+
+enum DivaAccountStatus {
+  ACTIVE
+  SUSPENDED
+  FROZEN
+  CLOSED
+  PENDING_VERIFICATION
+}
+
+enum DivaKYCStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum DivaDocumentType {
+  PASSPORT
+  NATIONAL_ID
+  DRIVING_LICENSE
+  SELFIE
+}
+
+enum DivaLoginStatus {
+  SUCCESS
+  FAILED
+  BLOCKED
+}
+
+enum DivaPortfolioStatus {
+  ACTIVE
+  FROZEN
+  SUSPENDED
+  CLOSED
+}
+
+enum DivaLedgerType {
+  DEPOSIT_CREDIT
+  ADMIN_CREDIT
+  ADMIN_DEBIT
+  BALANCE_CORRECTION
+  SYSTEM_ADJUSTMENT
+}
+
+enum DivaPortfolioEventType {
+  PORTFOLIO_CREATED
+  DEPOSIT_CREDITED
+  WITHDRAWAL_DEBITED
+  ADMIN_CREDIT
+  ADMIN_DEBIT
+  BALANCE_CORRECTION
+  SYSTEM_ADJUSTMENT
+  STATUS_CHANGED
+}
+
+enum DivaDepositStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum DivaWithdrawalStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  CANCELLED
+  COMPLETED
+}
+
+enum DivaWithdrawalNetwork {
+  TRC20
+  ERC20
+  BEP20
+  BTC
+  SOL
+}
+
+enum DivaFinancialOpsAction {
+  WITHDRAWAL_SUBMITTED
+  WITHDRAWAL_APPROVED
+  WITHDRAWAL_REJECTED
+  WITHDRAWAL_CANCELLED
+  WITHDRAWAL_COMPLETED
+  BALANCE_LOCKED
+  BALANCE_UNLOCKED
+  STATUS_CHANGED
+}
+
+enum DivaAuditAction {
+  USER_REGISTERED
+  USER_LOGIN
+  USER_LOGOUT
+  KYC_SUBMITTED
+  KYC_APPROVED
+  KYC_REJECTED
+  DEPOSIT_SUBMITTED
+  DEPOSIT_APPROVED
+  DEPOSIT_REJECTED
+  WITHDRAWAL_SUBMITTED
+  WITHDRAWAL_APPROVED
+  WITHDRAWAL_REJECTED
+  BALANCE_ADJUSTED
+  ADMIN_ACTION
+  WALLET_CREATED
+  WALLET_UPDATED
+  WALLET_ACTIVATED
+  WALLET_DEACTIVATED
+  WALLET_DELETED
+}
+
+// ─── DIVA Profile ─────────────────────────────────────────────────────────────
+
+model DivaProfile {
+  id            String             @id @default(cuid())
+  userId        String             @unique
+  user          User               @relation(fields: [userId], references: [id])
+  country       String?
+  dateOfBirth   String?
+  nationality   String?
+  address       String?
+  city          String?
+  state         String?
+  postalCode    String?
+  walletAddress String?
+  referralCode  String?            @unique
+  referredBy    String?
+  accountStatus DivaAccountStatus  @default(PENDING_VERIFICATION)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+}
+
+// ─── DIVA Auth Tokens ─────────────────────────────────────────────────────────
+
+model DivaEmailVerifyToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([token])
+  @@index([userId])
+}
+
+model DivaPasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([token])
+  @@index([userId])
+}
+
+// ─── DIVA KYC ─────────────────────────────────────────────────────────────────
+
+model DivaKYCSubmission {
+  id          String          @id @default(cuid())
+  userId      String          @unique
+  user        User            @relation(fields: [userId], references: [id])
+  status      DivaKYCStatus   @default(PENDING)
+  fullName    String?
+  dateOfBirth String?
+  nationality String?
+  address     String?
+  adminNotes  String?
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  submittedAt DateTime?
+  updatedAt   DateTime        @updatedAt
+
+  documents   DivaKYCDocument[]
+
+  @@index([status])
+  @@index([userId])
+}
+
+model DivaKYCDocument {
+  id         String           @id @default(cuid())
+  kycId      String
+  kyc        DivaKYCSubmission @relation(fields: [kycId], references: [id], onDelete: Cascade)
+  type       DivaDocumentType
+  url        String
+  fileName   String?
+  fileSize   Int?
+  mimeType   String?
+  uploadedAt DateTime         @default(now())
+
+  @@index([kycId])
+}
+
+// ─── DIVA Login / Devices ─────────────────────────────────────────────────────
+
+model DivaLoginHistory {
+  id        String          @id @default(cuid())
+  userId    String
+  user      User            @relation(fields: [userId], references: [id])
+  ipAddress String?
+  userAgent String?
+  device    String?
+  location  String?
+  status    DivaLoginStatus @default(SUCCESS)
+  createdAt DateTime        @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model DivaDevice {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  deviceId    String?
+  fingerprint String?
+  userAgent   String?
+  deviceName  String?
+  lastSeen    DateTime @default(now())
+  isTrusted   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+model DivaTwoFactorAuth {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id])
+  secret      String
+  isEnabled   Boolean  @default(false)
+  backupCodes String[]
+  enabledAt   DateTime?
+}
+
+// ─── DIVA Referrals ───────────────────────────────────────────────────────────
+
+model DivaReferral {
+  id         String   @id @default(cuid())
+  referrerId String
+  referrer   User     @relation("DivaReferrer", fields: [referrerId], references: [id])
+  referredId String   @unique
+  referred   User     @relation("DivaReferred", fields: [referredId], references: [id])
+  status     String   @default("PENDING")
+  createdAt  DateTime @default(now())
+
+  @@index([referrerId])
+}
+
+// ─── DIVA Portfolio ───────────────────────────────────────────────────────────
+
+model DivaPortfolio {
+  id               String              @id @default(cuid())
+  userId           String              @unique
+  user             User                @relation(fields: [userId], references: [id])
+  currentBalance   Decimal             @default(0) @db.Decimal(24, 8)
+  availableBalance Decimal             @default(0) @db.Decimal(24, 8)
+  lockedBalance    Decimal             @default(0) @db.Decimal(24, 8)
+  status           DivaPortfolioStatus @default(ACTIVE)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  ledgerEntries DivaLedgerEntry[]
+  events        DivaPortfolioEvent[]
+  adjustments   DivaBalanceAdjustment[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model DivaLedgerEntry {
+  id              String         @id @default(cuid())
+  portfolioId     String
+  portfolio       DivaPortfolio  @relation(fields: [portfolioId], references: [id])
+  userId          String
+  transactionType DivaLedgerType
+  amount          Decimal        @db.Decimal(24, 8)
+  previousBalance Decimal        @db.Decimal(24, 8)
+  newBalance      Decimal        @db.Decimal(24, 8)
+  referenceType   String?
+  referenceId     String?
+  notes           String?
+  createdBy       String?
+  creator         User?          @relation("DivaLedgerCreator", fields: [createdBy], references: [id])
+  createdAt       DateTime       @default(now())
+
+  @@index([portfolioId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model DivaPortfolioEvent {
+  id               String                 @id @default(cuid())
+  portfolioId      String
+  portfolio        DivaPortfolio          @relation(fields: [portfolioId], references: [id])
+  userId           String
+  eventType        DivaPortfolioEventType
+  eventDescription String?
+  metadata         Json?
+  createdAt        DateTime               @default(now())
+
+  @@index([portfolioId])
+  @@index([userId])
+}
+
+model DivaBalanceAdjustment {
+  id             String        @id @default(cuid())
+  portfolioId    String?
+  portfolio      DivaPortfolio? @relation(fields: [portfolioId], references: [id])
+  userId         String
+  adjustmentType String
+  amount         Decimal       @db.Decimal(24, 8)
+  reason         String?
+  ledgerEntryId  String?
+  createdBy      String?
+  creator        User?         @relation("DivaAdjCreator", fields: [createdBy], references: [id])
+  createdAt      DateTime      @default(now())
+
+  @@index([userId])
+}
+
+// ─── DIVA Deposits ────────────────────────────────────────────────────────────
+
+model DivaDepositWallet {
+  id           String    @id @default(cuid())
+  walletName   String
+  coinType     String
+  network      String
+  address      String
+  qrImageUrl   String?
+  instructions String?
+  sortOrder    Int       @default(0)
+  status       String    @default("ACTIVE")
+  createdBy    String?
+  creator      User?     @relation("DivaWalletCreator", fields: [createdBy], references: [id])
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  deposits DivaDeposit[]
+
+  @@index([status])
+}
+
+model DivaDeposit {
+  id              String            @id @default(cuid())
+  userId          String
+  user            User              @relation(fields: [userId], references: [id])
+  walletId        String
+  wallet          DivaDepositWallet @relation(fields: [walletId], references: [id])
+  coinType        String
+  network         String
+  amount          Decimal           @db.Decimal(20, 8)
+  transactionHash String            @unique
+  proofImageUrl   String?
+  notes           String?
+  status          DivaDepositStatus @default(PENDING)
+  adminNotes      String?
+  reviewedBy      String?
+  reviewer        User?             @relation("DivaDepositReviewer", fields: [reviewedBy], references: [id])
+  ledgerEntryId   String?
+  submittedAt     DateTime          @default(now())
+  reviewedAt      DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([transactionHash])
+}
+
+// ─── DIVA Withdrawals ─────────────────────────────────────────────────────────
+
+model DivaWithdrawal {
+  id            String                @id @default(cuid())
+  userId        String
+  user          User                  @relation("DivaUserWithdrawals", fields: [userId], references: [id])
+  amount        Decimal               @db.Decimal(24, 8)
+  walletAddress String
+  network       DivaWithdrawalNetwork @default(TRC20)
+  status        DivaWithdrawalStatus  @default(SUBMITTED)
+  userNotes     String?
+  adminNotes    String?
+  reviewedBy    String?
+  reviewer      User?                 @relation("DivaWithdrawalReviewer", fields: [reviewedBy], references: [id])
+  ledgerEntryId String?
+  submittedAt   DateTime              @default(now())
+  reviewedAt    DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  statusHistory DivaWithdrawalStatusHistory[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model DivaWithdrawalStatusHistory {
+  id           String                @id @default(cuid())
+  withdrawalId String
+  withdrawal   DivaWithdrawal        @relation(fields: [withdrawalId], references: [id], onDelete: Cascade)
+  oldStatus    DivaWithdrawalStatus?
+  newStatus    DivaWithdrawalStatus
+  changedBy    String?
+  notes        String?
+  createdAt    DateTime              @default(now())
+
+  @@index([withdrawalId])
+}
+
+// ─── DIVA Financial Ops Log ───────────────────────────────────────────────────
+
+model DivaFinancialOpsLog {
+  id          String                 @id @default(cuid())
+  actionType  DivaFinancialOpsAction
+  referenceId String?
+  userId      String?
+  performedBy String?
+  ipAddress   String?
+  metadata    Json?
+  createdAt   DateTime               @default(now())
+
+  @@index([actionType])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ─── DIVA Notifications ───────────────────────────────────────────────────────
+
+model DivaNotification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  message   String
+  type      String   @default("info")
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+}
+
+// ─── DIVA Audit Log ───────────────────────────────────────────────────────────
+
+model DivaAuditLog {
+  id          String          @id @default(cuid())
+  action      DivaAuditAction
+  entityType  String
+  entityId    String?
+  performedBy String?
+  actor       User?           @relation("DivaAuditActor", fields: [performedBy], references: [id])
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json?
+  createdAt   DateTime        @default(now())
+
+  @@index([action])
+  @@index([performedBy])
+  @@index([createdAt])
+}
+
+// ─── DIVA Forecasting ─────────────────────────────────────────────────────────
+
+enum DivaContributionFreq {
+  MONTHLY
+  QUARTERLY
+  ANNUALLY
+}
+
+enum DivaCompoundingFreq {
+  DAILY
+  MONTHLY
+  QUARTERLY
+  ANNUALLY
+}
+
+model DivaForecastScenario {
+  id                 String               @id @default(cuid())
+  userId             String
+  scenarioName       String
+  initialAmount      Float
+  contributionAmount Float
+  contributionFreq   DivaContributionFreq @default(MONTHLY)
+  durationYears      Int
+  growthRate         Float
+  compoundingFreq    DivaCompoundingFreq  @default(MONTHLY)
+  color              String               @default("#D4AF37")
+  isPinned           Boolean              @default(false)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  results DivaForecastResult[]
+
+  @@index([userId])
+}
+
+model DivaForecastResult {
+  id              String               @id @default(cuid())
+  scenarioId      String
+  scenario        DivaForecastScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  projectedValue  Float
+  totalContribs   Float
+  estimatedGrowth Float
+  dataPoints      Json
+  generatedAt     DateTime             @default(now())
+
+  @@index([scenarioId])
+}
+
+enum DivaMilestoneStatus {
+  IN_PROGRESS
+  ACHIEVED
+  MISSED
+  CANCELLED
+}
+
+model DivaUserMilestone {
+  id            String              @id @default(cuid())
+  userId        String
+  milestoneName String
+  title         String?
+  targetAmount  Float
+  currentAmount Float               @default(0)
+  targetDate    DateTime?
+  notes         String?
+  status        DivaMilestoneStatus @default(IN_PROGRESS)
+  isCompleted   Boolean             @default(false)
+  completedAt   DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([userId])
 }

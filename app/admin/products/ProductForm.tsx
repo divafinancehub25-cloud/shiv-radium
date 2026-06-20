@@ -21,13 +21,13 @@ type Field = {
   label: string;
   fieldKey: string;
   type: string;
-  placeholder: string;
-  helpText: string;
+  placeholder: string | null;
+  helpText: string | null;
   isRequired: boolean;
   sortOrder: number;
   options: Option[];
 };
-type Category = { id: string; name: string; icon: string };
+type Category = { id: string; name: string; icon: string | null };
 type Product = {
   id: string;
   name: string;
@@ -339,7 +339,7 @@ export default function ProductForm({ categories, product }: { categories: Categ
                         <input
                           className={inputClass}
                           placeholder="Placeholder text..."
-                          value={field.placeholder}
+                          value={field.placeholder ?? ""}
                           onChange={(e) => updateField(index, "placeholder", e.target.value)}
                         />
                       </div>
@@ -348,7 +348,7 @@ export default function ProductForm({ categories, product }: { categories: Categ
                         <input
                           className={inputClass}
                           placeholder="e.g. Enter the name to be engraved"
-                          value={field.helpText}
+                          value={field.helpText ?? ""}
                           onChange={(e) => updateField(index, "helpText", e.target.value)}
                         />
                       </div>
