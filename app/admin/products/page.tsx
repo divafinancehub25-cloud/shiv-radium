@@ -36,7 +36,7 @@ export default async function AdminProductsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {products.map((product) => (
+            {products.map((product: typeof products[0]) => (
               <tr key={product.id} className="hover:bg-gray-50 transition-colors">
                 <td className="px-5 py-3.5">
                   <p className="font-medium text-gray-900">{product.name}</p>
