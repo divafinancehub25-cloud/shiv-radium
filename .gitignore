@@ -48,7 +48,8 @@ next-env.d.ts
 /app/(diva-admin)/
 /app/(diva-auth)/
 /app/(diva-dashboard)/
-/app/api/auth/
+/app/api/auth/[...nextauth]/
+/app/api/diva/auth/
 /app/api/diva/
 /app/api/webhooks/
 /app/diva-admin/
