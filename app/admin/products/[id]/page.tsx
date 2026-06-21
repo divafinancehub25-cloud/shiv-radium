@@ -14,9 +14,9 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
   const serialized = {
     ...product,
     basePrice: Number(product.basePrice),
-    fields: product.fields.map((f) => ({
+    fields: product.fields.map((f: typeof product.fields[0]) => ({
       ...f,
-      options: f.options.map((o) => ({ ...o, price: o.price ? Number(o.price) : null })),
+      options: f.options.map((o: typeof f.options[0]) => ({ ...o, price: o.price ? Number(o.price) : null })),
     })),
   };
 
