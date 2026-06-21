@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { ArrowLeft } from "lucide-react";
 import CustomizerTool from "@/components/CustomizerTool";
 
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const product = await db.product.findUnique({ where: { slug }, select: { name: true, description: true } });
