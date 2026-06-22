@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, Upload, X } from "lucide-react";
 
 const FIELD_TYPES = [
   { value: "TEXT", label: "Text Input" },
@@ -38,6 +38,7 @@ type Product = {
   deliveryDays: number;
   isActive: boolean;
   isFeatured: boolean;
+  images: string[];
   fields: Field[];
 };
 
@@ -64,9 +65,24 @@ export default function ProductForm({ categories, product }: { categories: Categ
     product?.fields ?? []
   );
 
+  const [images, setImages] = useState<string[]>(product?.images ?? []);
+  const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [expandedField, setExpandedField] = useState<number | null>(null);
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
+    const data = await res.json();
+    if (res.ok && data.url) setImages((prev) => [...prev, data.url]);
+    else setError("Image upload failed");
+    setUploading(false);
+  }
 
   function setFormValue(key: string, value: string | boolean) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -146,7 +162,7 @@ export default function ProductForm({ categories, product }: { categories: Categ
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, fields }),
+        body: JSON.stringify({ ...form, images, fields }),
       });
 
       const data = await res.json();
@@ -249,6 +265,37 @@ export default function ProductForm({ categories, product }: { categories: Categ
               />
             </div>
           </div>
+        </div>
+
+        {/* Product Images */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-6">
+          <h2 className="font-semibold text-gray-900 mb-4">Product Images</h2>
+          <div className="flex flex-wrap gap-3 mb-4">
+            {images.map((img, i) => (
+              <div key={i} className="relative w-24 h-24 rounded-xl overflow-hidden border border-gray-200">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={img} alt="" className="w-full h-full object-cover" />
+                <button
+                  onClick={() => setImages((prev) => prev.filter((_, idx) => idx !== i))}
+                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+            <label className="w-24 h-24 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-orange-400 transition-colors">
+              {uploading ? (
+                <span className="text-xs text-gray-400">Uploading...</span>
+              ) : (
+                <>
+                  <Upload className="w-5 h-5 text-gray-300 mb-1" />
+                  <span className="text-xs text-gray-400">Add Image</span>
+                </>
+              )}
+              <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
+            </label>
+          </div>
+          <p className="text-xs text-gray-400">Pehli image main product image hogi</p>
         </div>
 
         {/* Custom Fields */}
