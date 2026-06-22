@@ -10,12 +10,24 @@ export async function POST(req: NextRequest) {
   }
 
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
   await db.otpToken.create({ data: { phone, otp, expiresAt } });
 
-  // TODO: Send OTP via SMS (Twilio/MSG91). For now log to console.
-  console.log(`OTP for ${phone}: ${otp}`);
+  const authKey = process.env.MSG91_AUTH_KEY;
+  const templateId = "6a390567fa7d9069790f1063";
+
+  if (authKey) {
+    await fetch("https://control.msg91.com/api/v5/otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "authkey": authKey },
+      body: JSON.stringify({
+        template_id: templateId,
+        mobile: `91${phone}`,
+        otp,
+      }),
+    });
+  }
 
   return NextResponse.json({ success: true, message: "OTP sent" });
 }
