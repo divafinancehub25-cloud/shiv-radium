@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { ShoppingBag, Star, Truck, Shield, Gift, Phone, Mail, Instagram, Facebook } from "lucide-react";
+import { ShoppingBag, Star, Truck, Shield, Gift, Phone, Mail } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -253,8 +253,8 @@ export default async function HomePage() {
             <p className="text-white font-bold text-xl mb-2">Shiv Radium</p>
             <p className="text-sm leading-relaxed">Personalized gifts crafted with love for every occasion.</p>
             <div className="flex gap-3 mt-4">
-              <a href="#" className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-orange-500 transition-colors"><Instagram className="w-4 h-4" /></a>
-              <a href="#" className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-orange-500 transition-colors"><Facebook className="w-4 h-4" /></a>
+              <a href="#" className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-orange-500 transition-colors text-xs font-bold">IG</a>
+              <a href="#" className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-orange-500 transition-colors text-xs font-bold">FB</a>
             </div>
           </div>
           <div>
