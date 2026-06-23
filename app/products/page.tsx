@@ -54,8 +54,13 @@ export default async function ProductsPage() {
               href={`/product/${product.slug}`}
               className="group border border-gray-200 rounded-2xl overflow-hidden hover:shadow-lg hover:border-orange-200 transition-all"
             >
-              <div className="bg-gray-50 h-48 flex items-center justify-center text-5xl group-hover:bg-orange-50 transition-colors">
-                {product.category.icon}
+              <div className="bg-gray-50 h-48 flex items-center justify-center overflow-hidden group-hover:bg-orange-50 transition-colors">
+                {product.images?.[0] ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={product.images[0]} alt={product.name} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-5xl">{product.category.icon}</span>
+                )}
               </div>
               <div className="p-4">
                 <p className="text-xs text-orange-500 font-medium mb-1">{product.category.name}</p>
