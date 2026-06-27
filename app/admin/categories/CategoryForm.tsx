@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Upload } from "lucide-react";
 
 type Category = {
   id: string;
@@ -9,6 +10,7 @@ type Category = {
   slug: string;
   description: string | null;
   icon: string | null;
+  image: string | null;
   sortOrder: number;
   isActive: boolean;
 };
@@ -26,11 +28,25 @@ export default function CategoryForm({ category }: { category?: Category }) {
     slug: category?.slug ?? "",
     description: category?.description ?? "",
     icon: category?.icon ?? "",
+    image: category?.image ?? "",
     sortOrder: category?.sortOrder?.toString() ?? "0",
     isActive: category?.isActive ?? true,
   });
+  const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
+    const data = await res.json();
+    if (res.ok && data.url) set("image", data.url);
+    setUploading(false);
+  }
 
   function set(key: string, value: string | boolean) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -108,6 +124,23 @@ export default function CategoryForm({ category }: { category?: Category }) {
               value={form.sortOrder}
               onChange={(e) => set("sortOrder", e.target.value)}
             />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Category Image</label>
+            <div className="flex items-center gap-4">
+              {form.image && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={form.image} alt="" className="w-16 h-16 rounded-xl object-cover border border-gray-200" />
+              )}
+              <label className="flex items-center gap-2 cursor-pointer border-2 border-dashed border-gray-200 rounded-xl px-4 py-3 hover:border-orange-400 transition-colors">
+                <Upload className="w-4 h-4 text-gray-400" />
+                <span className="text-sm text-gray-600">{uploading ? "Uploading..." : "Upload Image"}</span>
+                <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
+              </label>
+              {form.image && (
+                <button type="button" onClick={() => set("image", "")} className="text-xs text-red-400 hover:text-red-600">Remove</button>
+              )}
+            </div>
           </div>
           <div className="col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
