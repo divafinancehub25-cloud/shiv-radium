@@ -98,8 +98,12 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
                     .map(([k, v]) => (
                       <div key={k}>
                         <p className="text-xs text-gray-400 capitalize">{k.replace(/_/g, " ")}</p>
-                        {v.startsWith("blob:") || v.startsWith("http") ? (
-                          <a href={v} target="_blank" rel="noopener noreferrer" className="text-xs text-orange-500 underline">View Photo</a>
+                        {v.startsWith("http") ? (
+                          <div>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={v} alt={k} className="w-20 h-20 object-cover rounded-lg border border-gray-200 mt-1" />
+                            <a href={v} target="_blank" rel="noopener noreferrer" className="text-xs text-orange-500 underline block mt-1">View Full</a>
+                          </div>
                         ) : (
                           <p className="text-xs font-medium text-gray-700">{v}</p>
                         )}

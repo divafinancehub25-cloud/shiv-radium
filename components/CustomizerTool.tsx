@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { ShoppingCart, Upload, ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -32,10 +32,25 @@ export default function CustomizerTool({ product }: { product: Product }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [quantity, setQuantity] = useState(1);
   const [selectedImage, setSelectedImage] = useState(0);
+  const [uploading, setUploading] = useState<Record<string, boolean>>({});
+  const uploadingRef = useRef(uploading);
+  uploadingRef.current = uploading;
 
   function setValue(key: string, val: string) {
     setValues((prev) => ({ ...prev, [key]: val }));
     setErrors((prev) => ({ ...prev, [key]: "" }));
+  }
+
+  async function handleFileUpload(fieldKey: string, file: File) {
+    setUploading((prev) => ({ ...prev, [fieldKey]: true }));
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
+    const data = await res.json();
+    if (res.ok && data.url) {
+      setValue(fieldKey, data.url);
+    }
+    setUploading((prev) => ({ ...prev, [fieldKey]: false }));
   }
 
   function validate() {
@@ -261,7 +276,7 @@ export default function CustomizerTool({ product }: { product: Product }) {
                         <Upload className="w-5 h-5 text-gray-400" />
                         <div>
                           <p className="text-sm font-medium text-gray-700">
-                            {values[field.fieldKey] ? "Photo uploaded ✓" : "Upload your photo"}
+                            {uploading[field.fieldKey] ? "Uploading..." : values[field.fieldKey] ? "Photo uploaded ✓" : "Upload your photo"}
                           </p>
                           <p className="text-xs text-gray-400">JPG, PNG supported</p>
                         </div>
@@ -271,7 +286,7 @@ export default function CustomizerTool({ product }: { product: Product }) {
                           className="hidden"
                           onChange={(e) => {
                             const file = e.target.files?.[0];
-                            if (file) setValue(field.fieldKey, file.name);
+                            if (file) handleFileUpload(field.fieldKey, file);
                           }}
                         />
                       </label>

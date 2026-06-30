@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { ArrowLeft } from "lucide-react";
+import ProductsClient from "./ProductsClient";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "All Products" };
+export const metadata = { title: "All Products — Shiv Radium" };
 
 export default async function ProductsPage() {
   const [products, categories] = await Promise.all([
@@ -32,50 +33,8 @@ export default async function ProductsPage() {
         <Link href="/" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-orange-500 mb-6 transition-colors">
           <ArrowLeft className="w-4 h-4" /> Home
         </Link>
-
         <h1 className="text-3xl font-bold text-gray-900 mb-6">All Products</h1>
-
-        {/* Category filter */}
-        <div className="flex flex-wrap gap-2 mb-8">
-          <Link href="/products" className="px-4 py-1.5 rounded-full text-sm font-medium bg-orange-500 text-white">
-            All
-          </Link>
-          {categories.map((c) => (
-            <Link key={c.id} href={`/category/${c.slug}`} className="px-4 py-1.5 rounded-full text-sm font-medium border border-gray-200 text-gray-600 hover:border-orange-400 hover:text-orange-500 transition-colors">
-              {c.icon} {c.name}
-            </Link>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-          {products.map((product) => (
-            <Link
-              key={product.id}
-              href={`/product/${product.slug}`}
-              className="group border border-gray-200 rounded-2xl overflow-hidden hover:shadow-lg hover:border-orange-200 transition-all"
-            >
-              <div className="bg-gray-50 h-48 flex items-center justify-center overflow-hidden group-hover:bg-orange-50 transition-colors">
-                {product.images?.[0] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={product.images[0]} alt={product.name} className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-5xl">{product.category.icon}</span>
-                )}
-              </div>
-              <div className="p-4">
-                <p className="text-xs text-orange-500 font-medium mb-1">{product.category.name}</p>
-                <h3 className="font-semibold text-gray-900 text-sm leading-tight mb-2 group-hover:text-orange-600 transition-colors">
-                  {product.name}
-                </h3>
-                <p className="text-xs text-gray-400 line-clamp-2 mb-3">{product.description}</p>
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-gray-900">₹{Number(product.basePrice)}</span>
-                  <span className="text-xs text-gray-400">{product.deliveryDays}d delivery</span>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+        <ProductsClient products={products} categories={categories} />
       </div>
     </div>
   );
