@@ -5,7 +5,7 @@ import { ShoppingBag, Star, Truck, Shield, Gift, Phone, Mail } from "lucide-reac
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [categories, featuredProducts] = await Promise.all([
+  const [categories, featuredProducts, settings] = await Promise.all([
     db.category.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
     db.product.findMany({
       where: { isActive: true, isFeatured: true },
@@ -13,20 +13,32 @@ export default async function HomePage() {
       orderBy: { sortOrder: "asc" },
       take: 8,
     }),
+    db.setting.findMany({ where: { key: { in: ["store_logo", "store_name", "store_phone"] } } }),
   ]);
+
+  const s: Record<string, string> = {};
+  for (const row of settings) s[row.key] = row.value;
+  const storeName = s.store_name ?? "Shiv Radium";
+  const storeLogo = s.store_logo ?? null;
+  const storePhone = s.store_phone ?? "+91 98765 43210";
 
   return (
     <div className="min-h-screen bg-white">
       {/* Top Bar */}
       <div className="bg-orange-500 text-white text-xs py-2 text-center font-medium">
-        🎁 Free Delivery on orders above ₹999 &nbsp;|&nbsp; 🌟 4.9★ Rated &nbsp;|&nbsp; 📞 Call: +91 98765 43210
+        🎁 Free Delivery on orders above ₹999 &nbsp;|&nbsp; 🌟 4.9★ Rated &nbsp;|&nbsp; 📞 Call: {storePhone}
       </div>
 
       {/* Navbar */}
       <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="text-2xl font-bold text-orange-500">
-            Shiv <span className="text-gray-900">Radium</span>
+          <Link href="/" className="flex items-center gap-2">
+            {storeLogo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={storeLogo} alt={storeName} className="h-10 w-auto object-contain" />
+            ) : (
+              <span className="text-2xl font-bold text-orange-500">{storeName.split(" ")[0]} <span className="text-gray-900">{storeName.split(" ").slice(1).join(" ")}</span></span>
+            )}
           </Link>
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-gray-600">
             <Link href="/products" className="hover:text-orange-500 transition-colors">All Products</Link>
@@ -128,8 +140,13 @@ export default async function HomePage() {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             {categories.map((cat) => (
               <Link key={cat.id} href={`/category/${cat.slug}`}
-                className="group flex flex-col items-center gap-3 p-5 border-2 border-gray-100 rounded-2xl hover:border-orange-400 hover:bg-orange-50 transition-all hover:shadow-lg hover:-translate-y-1">
-                <span className="text-4xl group-hover:scale-110 transition-transform">{cat.icon}</span>
+                className="group flex flex-col items-center gap-3 p-4 border-2 border-gray-100 rounded-2xl hover:border-orange-400 hover:bg-orange-50 transition-all hover:shadow-lg hover:-translate-y-1">
+                {cat.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={cat.image} alt={cat.name} className="w-16 h-16 object-cover rounded-xl group-hover:scale-110 transition-transform" />
+                ) : (
+                  <span className="text-4xl group-hover:scale-110 transition-transform">{cat.icon}</span>
+                )}
                 <span className="text-sm font-semibold text-gray-700 group-hover:text-orange-600 text-center leading-tight">{cat.name}</span>
               </Link>
             ))}

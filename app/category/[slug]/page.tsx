@@ -50,7 +50,12 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
         {/* Category Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
-            <span className="text-4xl">{category.icon}</span>
+            {category.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={category.image} alt={category.name} className="w-12 h-12 rounded-xl object-cover" />
+            ) : (
+              <span className="text-4xl">{category.icon}</span>
+            )}
             <h1 className="text-3xl font-bold text-gray-900">{category.name}</h1>
           </div>
           {category.description && (
