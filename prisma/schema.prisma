@@ -163,6 +163,14 @@ model User {
   divaNotifications       DivaNotification[]
   divaAuditLogs           DivaAuditLog[]           @relation("DivaAuditActor")
   divaBalanceAdjustments  DivaBalanceAdjustment[]  @relation("DivaAdjCreator")
+  divaUserRewards         DivaUserReward[]
+  divaUserAchievements    DivaUserAchievement[]
+  divaAnnouncements       DivaAnnouncement[]       @relation("DivaAnnouncementAuthor")
+  divaAnnouncementBookmarks DivaAnnouncementBookmark[]
+  divaRewardRules         DivaRewardRule[]         @relation("DivaRewardRuleCreator")
+  divaGeneratedReports    DivaGeneratedReport[]    @relation("DivaReportGenerator")
+  divaAlertsAssigned      DivaSystemAlert[]        @relation("DivaAlertAssignee")
+  divaAlertsAcknowledged  DivaSystemAlert[]        @relation("DivaAlertAcknowledger")
 
   @@index([phone])
   @@index([email])
@@ -391,11 +399,13 @@ model DivaProfile {
   state         String?
   postalCode    String?
   walletAddress String?
-  referralCode  String?            @unique
-  referredBy    String?
-  accountStatus DivaAccountStatus  @default(PENDING_VERIFICATION)
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  referralCode        String?            @unique
+  referredBy          String?
+  accountStatus       DivaAccountStatus  @default(PENDING_VERIFICATION)
+  onboardingCompleted Boolean            @default(false)
+  onboardingStep      Int                @default(0)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 }
 
 // ─── DIVA Auth Tokens ─────────────────────────────────────────────────────────
@@ -508,15 +518,25 @@ model DivaTwoFactorAuth {
 // ─── DIVA Referrals ───────────────────────────────────────────────────────────
 
 model DivaReferral {
-  id         String   @id @default(cuid())
-  referrerId String
-  referrer   User     @relation("DivaReferrer", fields: [referrerId], references: [id])
-  referredId String   @unique
-  referred   User     @relation("DivaReferred", fields: [referredId], references: [id])
-  status     String   @default("PENDING")
-  createdAt  DateTime @default(now())
+  id              String              @id @default(cuid())
+  referrerId      String
+  referrer        User                @relation("DivaReferrer", fields: [referrerId], references: [id])
+  referredId      String              @unique
+  referred        User                @relation("DivaReferred", fields: [referredId], references: [id])
+  referralCode    String?
+  status          DivaReferralStatus  @default(PENDING)
+  clickedAt       DateTime?
+  registeredAt    DateTime?
+  kycCompletedAt  DateTime?
+  activatedAt     DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  events DivaReferralEvent[]
 
   @@index([referrerId])
+  @@index([referralCode])
+  @@index([status])
 }
 
 // ─── DIVA Portfolio ───────────────────────────────────────────────────────────
@@ -804,4 +824,323 @@ model DivaUserMilestone {
   updatedAt     DateTime            @updatedAt
 
   @@index([userId])
+}
+
+// ─── DIVA Phase 6 — Referral & Community ──────────────────────────────────────
+
+enum DivaReferralStatus {
+  PENDING
+  CLICKED
+  REGISTERED
+  KYC_COMPLETED
+  ACTIVATED
+  EXPIRED
+}
+
+enum DivaReferralEventType {
+  LINK_GENERATED
+  LINK_CLICKED
+  ACCOUNT_CREATED
+  KYC_SUBMITTED
+  KYC_APPROVED
+  ACTIVATED
+}
+
+enum DivaRewardType {
+  POINTS
+  BADGE
+  CREDIT
+  TIER_ADVANCEMENT
+}
+
+enum DivaRewardStatus {
+  PENDING
+  ACTIVE
+  CLAIMED
+  EXPIRED
+}
+
+enum DivaAnnouncementCategory {
+  UPDATES
+  EVENTS
+  EDUCATION
+  GENERAL
+}
+
+enum DivaAnnouncementStatus {
+  DRAFT
+  PUBLISHED
+  SCHEDULED
+  ARCHIVED
+}
+
+enum DivaAchievementTrigger {
+  PROFILE_COMPLETED
+  KYC_APPROVED
+  FIRST_DEPOSIT
+  FIRST_REFERRAL
+  FIVE_REFERRALS
+  TEN_REFERRALS
+  COMMUNITY_ACTIVE
+  DEPOSIT_MILESTONE
+  REFERRAL_MILESTONE
+}
+
+// Extend DivaReferral with journey tracking fields
+model DivaReferralEvent {
+  id          String                @id @default(cuid())
+  referralId  String
+  referral    DivaReferral          @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  eventType   DivaReferralEventType
+  metadata    Json?
+  createdAt   DateTime              @default(now())
+
+  @@index([referralId])
+  @@index([eventType])
+}
+
+model DivaRewardRule {
+  id           String         @id @default(cuid())
+  ruleName     String
+  description  String?
+  rewardType   DivaRewardType
+  rewardValue  Float
+  triggerEvent String
+  conditions   Json?
+  isActive     Boolean        @default(true)
+  createdBy    String?
+  creator      User?          @relation("DivaRewardRuleCreator", fields: [createdBy], references: [id])
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  userRewards DivaUserReward[]
+
+  @@index([isActive])
+}
+
+model DivaUserReward {
+  id          String           @id @default(cuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id])
+  ruleId      String?
+  rule        DivaRewardRule?  @relation(fields: [ruleId], references: [id])
+  rewardType  DivaRewardType
+  rewardName  String
+  rewardValue Float            @default(0)
+  status      DivaRewardStatus @default(ACTIVE)
+  awardedAt   DateTime         @default(now())
+  claimedAt   DateTime?
+  expiresAt   DateTime?
+
+  @@index([userId])
+  @@index([status])
+}
+
+model DivaAnnouncement {
+  id          String                   @id @default(cuid())
+  title       String
+  content     String
+  category    DivaAnnouncementCategory @default(GENERAL)
+  status      DivaAnnouncementStatus   @default(DRAFT)
+  isPinned    Boolean                  @default(false)
+  imageUrl    String?
+  publishedAt DateTime?
+  scheduledAt DateTime?
+  createdBy   String?
+  author      User?                    @relation("DivaAnnouncementAuthor", fields: [createdBy], references: [id])
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  bookmarks DivaAnnouncementBookmark[]
+
+  @@index([status])
+  @@index([category])
+  @@index([isPinned])
+}
+
+model DivaAnnouncementBookmark {
+  id             String           @id @default(cuid())
+  userId         String
+  user           User             @relation(fields: [userId], references: [id])
+  announcementId String
+  announcement   DivaAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  createdAt      DateTime         @default(now())
+
+  @@unique([userId, announcementId])
+  @@index([userId])
+}
+
+model DivaAchievement {
+  id          String                 @id @default(cuid())
+  name        String
+  description String
+  badgeIcon   String                 @default("🏆")
+  badgeColor  String                 @default("#D4AF37")
+  trigger     DivaAchievementTrigger
+  isActive    Boolean                @default(true)
+  sortOrder   Int                    @default(0)
+  createdAt   DateTime               @default(now())
+
+  userAchievements DivaUserAchievement[]
+
+  @@index([trigger])
+  @@index([isActive])
+}
+
+model DivaUserAchievement {
+  id            String          @id @default(cuid())
+  userId        String
+  user          User            @relation(fields: [userId], references: [id])
+  achievementId String
+  achievement   DivaAchievement @relation(fields: [achievementId], references: [id])
+  earnedAt      DateTime        @default(now())
+  metadata      Json?
+
+  @@unique([userId, achievementId])
+  @@index([userId])
+}
+
+model DivaReferralClick {
+  id           String   @id @default(cuid())
+  referralCode String
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([referralCode])
+}
+
+// ─── DIVA Phase 7 — Analytics & BI ───────────────────────────────────────────
+
+enum DivaSnapshotPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum DivaAlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum DivaAlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum DivaReportFormat {
+  CSV
+  JSON
+}
+
+enum DivaReportStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model DivaAnalyticsSnapshot {
+  id                   String              @id @default(cuid())
+  period               DivaSnapshotPeriod
+  periodDate           DateTime
+  totalUsers           Int                 @default(0)
+  newUsers             Int                 @default(0)
+  verifiedUsers        Int                 @default(0)
+  activePortfolios     Int                 @default(0)
+  totalDepositVolume   Decimal             @default(0) @db.Decimal(24, 8)
+  totalWithdrawVolume  Decimal             @default(0) @db.Decimal(24, 8)
+  depositCount         Int                 @default(0)
+  withdrawCount        Int                 @default(0)
+  kycApprovals         Int                 @default(0)
+  kycRejections        Int                 @default(0)
+  newReferrals         Int                 @default(0)
+  activatedReferrals   Int                 @default(0)
+  totalPortfolioValue  Decimal             @default(0) @db.Decimal(24, 8)
+  metadata             Json?
+  createdAt            DateTime            @default(now())
+
+  @@unique([period, periodDate])
+  @@index([period])
+  @@index([periodDate])
+}
+
+model DivaKpiDefinition {
+  id           String    @id @default(cuid())
+  name         String
+  description  String?
+  formula      String
+  unit         String    @default("number")
+  target       Float?
+  warningAt    Float?
+  criticalAt   Float?
+  isActive     Boolean   @default(true)
+  sortOrder    Int       @default(0)
+  createdBy    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  values DivaKpiValue[]
+
+  @@index([isActive])
+}
+
+model DivaKpiValue {
+  id        String           @id @default(cuid())
+  kpiId     String
+  kpi       DivaKpiDefinition @relation(fields: [kpiId], references: [id], onDelete: Cascade)
+  value     Float
+  period    DivaSnapshotPeriod
+  periodDate DateTime
+  createdAt DateTime         @default(now())
+
+  @@unique([kpiId, period, periodDate])
+  @@index([kpiId])
+  @@index([periodDate])
+}
+
+model DivaGeneratedReport {
+  id          String           @id @default(cuid())
+  reportName  String
+  reportType  String
+  format      DivaReportFormat @default(CSV)
+  status      DivaReportStatus @default(PENDING)
+  fileUrl     String?
+  fileSize    Int?
+  parameters  Json?
+  generatedBy String?
+  generator   User?            @relation("DivaReportGenerator", fields: [generatedBy], references: [id])
+  rowCount    Int?
+  errorMsg    String?
+  createdAt   DateTime         @default(now())
+  completedAt DateTime?
+
+  @@index([reportType])
+  @@index([generatedBy])
+  @@index([createdAt])
+}
+
+model DivaSystemAlert {
+  id          String            @id @default(cuid())
+  title       String
+  message     String
+  severity    DivaAlertSeverity @default(INFO)
+  status      DivaAlertStatus   @default(OPEN)
+  alertType   String
+  entityType  String?
+  entityId    String?
+  metadata    Json?
+  assignedTo  String?
+  assignee    User?             @relation("DivaAlertAssignee", fields: [assignedTo], references: [id])
+  acknowledgedBy String?
+  acknowledger   User?          @relation("DivaAlertAcknowledger", fields: [acknowledgedBy], references: [id])
+  acknowledgedAt DateTime?
+  resolvedAt     DateTime?
+  createdAt      DateTime       @default(now())
+
+  @@index([status])
+  @@index([severity])
+  @@index([alertType])
+  @@index([createdAt])
 }
