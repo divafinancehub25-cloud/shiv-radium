@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, slug, description, basePrice, categoryId, deliveryDays, isActive, isFeatured, images, fields } = body;
+    const { name, slug, description, basePrice, categoryId, deliveryDays, isActive, isFeatured, images, fields, previewPosition } = body;
 
     const product = await db.product.create({
       data: {
@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
         isActive,
         isFeatured,
         images: images ?? [],
+        previewPosition: previewPosition || "center",
       },
     });
 

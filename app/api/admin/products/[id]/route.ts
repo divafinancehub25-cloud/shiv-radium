@@ -7,7 +7,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const body = await req.json();
-    const { name, slug, description, basePrice, categoryId, deliveryDays, isActive, isFeatured, images, fields } = body;
+    const { name, slug, description, basePrice, categoryId, deliveryDays, isActive, isFeatured, images, fields, previewPosition } = body;
 
     await db.product.update({
       where: { id },
@@ -21,6 +21,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         isActive,
         isFeatured,
         images: images ?? [],
+        previewPosition: previewPosition || "center",
       },
     });
 

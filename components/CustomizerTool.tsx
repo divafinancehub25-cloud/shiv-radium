@@ -24,6 +24,16 @@ type Product = {
   deliveryDays: number;
   fields: Field[];
   category: { name: string; icon: string | null; slug: string };
+  previewPosition?: string;
+};
+
+// Overlay placement classes per admin-set position
+const POSITION_CLASSES: Record<string, string> = {
+  top: "items-center justify-start pt-[12%]",
+  center: "items-center justify-center",
+  bottom: "items-center justify-end pb-[12%]",
+  left: "items-start justify-center pl-[8%]",
+  right: "items-end justify-center pr-[8%]",
 };
 
 // Map font option values/labels to real font families for live preview
@@ -46,6 +56,7 @@ export default function CustomizerTool({ product }: { product: Product }) {
   const [selectedImage, setSelectedImage] = useState(0);
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [fontOpen, setFontOpen] = useState<Record<string, boolean>>({});
+  const [qualityWarning, setQualityWarning] = useState<Record<string, string>>({});
   const uploadingRef = useRef(uploading);
   uploadingRef.current = uploading;
 
@@ -79,7 +90,27 @@ export default function CustomizerTool({ product }: { product: Product }) {
     setErrors((prev) => ({ ...prev, [key]: "" }));
   }
 
+  // Warn if uploaded photo is too small for a sharp print
+  function checkPhotoQuality(fieldKey: string, file: File) {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const minSide = Math.min(img.width, img.height);
+      if (minSide < 800) {
+        setQualityWarning((p) => ({
+          ...p,
+          [fieldKey]: `⚠️ Photo chhoti hai (${img.width}×${img.height}px) — print blurry aa sakti hai. Behtar quality ke liye badi photo upload karo.`,
+        }));
+      } else {
+        setQualityWarning((p) => ({ ...p, [fieldKey]: "" }));
+      }
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  }
+
   async function handleFileUpload(fieldKey: string, file: File) {
+    checkPhotoQuality(fieldKey, file);
     setUploading((prev) => ({ ...prev, [fieldKey]: true }));
     const formData = new FormData();
     formData.append("file", file);
@@ -164,7 +195,7 @@ export default function CustomizerTool({ product }: { product: Product }) {
 
             {/* Live overlay: uploaded photo + text lines */}
             {(previewTextLines.length > 0 || previewImage) && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-[18%] pointer-events-none">
+              <div className={`absolute inset-0 flex flex-col gap-2 p-[10%] pointer-events-none ${POSITION_CLASSES[product.previewPosition ?? "center"] ?? POSITION_CLASSES.center}`}>
                 {previewImage && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -232,6 +263,17 @@ export default function CustomizerTool({ product }: { product: Product }) {
               <span>✅ 100% Customized</span>
               <span>🔒 Secure Payment</span>
               <span>⭐ 4.9 Rating</span>
+            </div>
+
+            {/* WhatsApp design approval trust badge */}
+            <div className="mt-4 bg-green-50 border border-green-200 rounded-xl p-3 flex items-start gap-2.5">
+              <span className="text-xl">💬</span>
+              <div>
+                <p className="text-sm font-semibold text-green-800">WhatsApp Design Approval</p>
+                <p className="text-xs text-green-700 mt-0.5">
+                  Order ke baad hum final design WhatsApp pe bhejenge — aapke approval ke baad hi product banega. 100% satisfaction!
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -434,6 +476,11 @@ export default function CustomizerTool({ product }: { product: Product }) {
                             }}
                           />
                         </label>
+                        {qualityWarning[field.fieldKey] && (
+                          <div className="mt-2 bg-amber-50 border border-amber-200 text-amber-700 text-xs px-3 py-2 rounded-xl">
+                            {qualityWarning[field.fieldKey]}
+                          </div>
+                        )}
                         {values[field.fieldKey] && (
                           <div className="mt-2 relative inline-block">
                             {/* eslint-disable-next-line @next/next/no-img-element */}

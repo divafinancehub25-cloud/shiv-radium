@@ -114,7 +114,16 @@ type Product = {
   isFeatured: boolean;
   images: string[];
   fields: Field[];
+  previewPosition?: string;
 };
+
+const PREVIEW_POSITIONS = [
+  { value: "top", label: "⬆️ Top", desc: "Text upar dikhega" },
+  { value: "center", label: "⏺️ Center", desc: "Text beech mein" },
+  { value: "bottom", label: "⬇️ Bottom", desc: "Text niche" },
+  { value: "left", label: "⬅️ Left", desc: "Text left side" },
+  { value: "right", label: "➡️ Right", desc: "Text right side" },
+];
 
 function slugify(text: string) {
   return text.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
@@ -133,6 +142,7 @@ export default function ProductForm({ categories, product }: { categories: Categ
     deliveryDays: product?.deliveryDays?.toString() ?? "5",
     isActive: product?.isActive ?? true,
     isFeatured: product?.isFeatured ?? false,
+    previewPosition: product?.previewPosition ?? "center",
   });
 
   const [fields, setFields] = useState<Field[]>(
@@ -381,6 +391,28 @@ export default function ProductForm({ categories, product }: { categories: Categ
             </label>
           </div>
           <p className="text-xs text-gray-400">Pehli image main product image hogi</p>
+        </div>
+
+        {/* Live Preview Position */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-6">
+          <h2 className="font-semibold text-gray-900 mb-1">Live Preview — Text Position</h2>
+          <p className="text-xs text-gray-400 mb-4">Customer ka text/photo product image pe kahan dikhega (mug pe side, frame ke andar, plate pe niche...)</p>
+          <div className="flex flex-wrap gap-2">
+            {PREVIEW_POSITIONS.map((p) => (
+              <button
+                key={p.value}
+                onClick={() => setFormValue("previewPosition", p.value)}
+                className={`px-4 py-2.5 rounded-xl text-sm font-medium border-2 transition-colors ${
+                  form.previewPosition === p.value
+                    ? "border-orange-500 bg-orange-50 text-orange-600"
+                    : "border-gray-200 text-gray-600 hover:border-orange-300"
+                }`}
+                title={p.desc}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Custom Fields */}
