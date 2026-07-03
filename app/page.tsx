@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { Search, Heart, ShoppingCart, Bell, MapPin, ChevronDown, Star } from "lucide-react";
+import { Search, Heart, ShoppingCart, Bell, Star } from "lucide-react";
 import HeroBanner from "@/app/components/HeroBanner";
 import FlashDeal from "@/app/components/FlashDeal";
+import LocationBar from "@/app/components/LocationBar";
+import BottomNav from "@/app/components/BottomNav";
 
 export const dynamic = "force-dynamic";
 
@@ -92,16 +94,7 @@ export default async function HomePage() {
           </div>
 
           {/* Location bar */}
-          <div className="flex items-center justify-between mt-2 px-1">
-            <div className="flex items-center gap-1 text-xs text-gray-600">
-              <MapPin className="w-3.5 h-3.5 text-orange-500" />
-              <span>Deliver to: <strong className="text-gray-800">Bhopal, Madhya Pradesh</strong></span>
-              <ChevronDown className="w-3 h-3 text-gray-400" />
-            </div>
-            <button className="text-[10px] text-orange-500 font-semibold border border-orange-300 rounded-lg px-2 py-0.5 hover:bg-orange-50 transition-colors">
-              Change Location
-            </button>
-          </div>
+          <LocationBar />
         </div>
       </header>
 
@@ -323,33 +316,7 @@ export default async function HomePage() {
       </div>
 
       {/* ── Bottom Nav (mobile only) ── */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 shadow-lg md:hidden z-50">
-        <div className="flex items-center justify-around py-2">
-          <Link href="/products" className="flex flex-col items-center gap-0.5 text-gray-500 hover:text-orange-500 transition-colors">
-            <span className="text-lg">⊞</span>
-            <span className="text-[9px] font-medium">Categories</span>
-          </Link>
-          <Link href="/login" className="flex flex-col items-center gap-0.5 text-gray-500 hover:text-orange-500 transition-colors">
-            <span className="text-lg">👤</span>
-            <span className="text-[9px] font-medium">Profile</span>
-          </Link>
-          <Link href="/" className="flex flex-col items-center gap-0.5 -mt-4">
-            <div className="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center shadow-lg shadow-orange-200">
-              <span className="text-xl">🏠</span>
-            </div>
-            <span className="text-[9px] font-medium text-orange-500 mt-0.5">Home</span>
-          </Link>
-          <Link href="/track" className="relative flex flex-col items-center gap-0.5 text-gray-500 hover:text-orange-500 transition-colors">
-            <span className="text-lg">🔔</span>
-            <span className="absolute top-0 right-1 w-3.5 h-3.5 bg-orange-500 rounded-full text-white text-[7px] flex items-center justify-center font-bold">3</span>
-            <span className="text-[9px] font-medium">Notifications</span>
-          </Link>
-          <Link href="/login" className="flex flex-col items-center gap-0.5 text-gray-500 hover:text-orange-500 transition-colors">
-            <span className="text-lg">👤</span>
-            <span className="text-[9px] font-medium">Account</span>
-          </Link>
-        </div>
-      </nav>
+      <BottomNav />
     </div>
   );
 }
