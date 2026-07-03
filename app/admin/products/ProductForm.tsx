@@ -4,6 +4,80 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, Upload, X } from "lucide-react";
 
+// Quick-add attribute presets (reference: Custom Attribute List)
+const ATTRIBUTE_PRESETS: { name: string; field: Omit<Field, "sortOrder"> }[] = [
+  {
+    name: "Frame Color",
+    field: {
+      label: "Frame Color", fieldKey: "frame_color", type: "COLOR_PICKER",
+      placeholder: "", helpText: "Select a custom color for your frame", isRequired: false,
+      options: [
+        { label: "Deep Crimson", value: "#9b1b30", price: null },
+        { label: "Cerulean Blue", value: "#2a7fc1", price: null },
+        { label: "Polished Gold", value: "#d4a437", price: null },
+        { label: "Alabaster White", value: "#f2efe6", price: null },
+        { label: "Matte Black", value: "#1c1c1c", price: null },
+      ],
+    },
+  },
+  {
+    name: "Upload Image",
+    field: {
+      label: "Image Upload", fieldKey: "customer_photo", type: "IMAGE_UPLOAD",
+      placeholder: "", helpText: "Select or drag an image here", isRequired: false, options: [],
+    },
+  },
+  {
+    name: "Text Box",
+    field: {
+      label: "Custom Text", fieldKey: "custom_text", type: "TEXT",
+      placeholder: "Add new custom text line...", helpText: "", isRequired: false, options: [],
+    },
+  },
+  {
+    name: "Text Color",
+    field: {
+      label: "Text Color", fieldKey: "text_color", type: "COLOR_PICKER",
+      placeholder: "", helpText: "", isRequired: false,
+      options: [
+        { label: "Black", value: "#1c1c1c", price: null },
+        { label: "Gold", value: "#d4a437", price: null },
+        { label: "White", value: "#ffffff", price: null },
+        { label: "Crimson", value: "#9b1b30", price: null },
+      ],
+    },
+  },
+  {
+    name: "Font Style",
+    field: {
+      label: "Font Style", fieldKey: "font_style", type: "DROPDOWN",
+      placeholder: "Admin Allowed font style", helpText: "", isRequired: false,
+      options: [
+        { label: "Arial Regular", value: "arial", price: null },
+        { label: "Playfair Display Bold", value: "playfair", price: null },
+        { label: "Courier New", value: "courier", price: null },
+        { label: "Amatic SC", value: "amatic", price: null },
+        { label: "Dancing Script", value: "dancing", price: null },
+      ],
+    },
+  },
+  {
+    name: "Size",
+    field: {
+      label: "Size", fieldKey: "size", type: "RADIO",
+      placeholder: "", helpText: "", isRequired: false,
+      options: [
+        { label: "XS", value: "xs", price: null },
+        { label: "S", value: "s", price: null },
+        { label: "M", value: "m", price: null },
+        { label: "L", value: "l", price: null },
+        { label: "XL", value: "xl", price: null },
+        { label: "XXL", value: "xxl", price: null },
+      ],
+    },
+  },
+];
+
 const FIELD_TYPES = [
   { value: "TEXT", label: "Text Input" },
   { value: "TEXTAREA", label: "Text Area" },
@@ -100,6 +174,17 @@ export default function ProductForm({ categories, product }: { categories: Categ
       options: [],
     };
     setFields((prev) => [...prev, newField]);
+    setExpandedField(fields.length);
+  }
+
+  function addPreset(preset: typeof ATTRIBUTE_PRESETS[number]) {
+    // Avoid duplicate fieldKey — append number if needed
+    let key = preset.field.fieldKey;
+    let n = 2;
+    while (fields.some((f) => f.fieldKey === key)) {
+      key = `${preset.field.fieldKey}_${n++}`;
+    }
+    setFields((prev) => [...prev, { ...preset.field, fieldKey: key, sortOrder: prev.length, options: preset.field.options.map((o) => ({ ...o })) }]);
     setExpandedField(fields.length);
   }
 
@@ -313,6 +398,27 @@ export default function ProductForm({ categories, product }: { categories: Categ
             </button>
           </div>
 
+          {/* Quick Attribute List (reference design) */}
+          <div className="border border-gray-200 rounded-xl mb-4 overflow-hidden">
+            <div className="grid grid-cols-2 bg-gray-50 px-4 py-2 text-xs font-semibold text-gray-500 border-b border-gray-200">
+              <span>Attribute Name</span>
+              <span className="text-right">Action</span>
+            </div>
+            {ATTRIBUTE_PRESETS.map((p) => (
+              <div key={p.name} className="grid grid-cols-2 items-center px-4 py-2 border-b border-gray-100 last:border-b-0">
+                <span className="text-sm text-gray-700">{p.name}</span>
+                <div className="text-right">
+                  <button
+                    onClick={() => addPreset(p)}
+                    className="text-xs font-semibold text-orange-500 border border-orange-300 hover:bg-orange-50 px-4 py-1 rounded-lg transition-colors"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
           {fields.length === 0 && (
             <div className="text-center py-8 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
               <p className="text-sm">Koi field nahi hai</p>
@@ -413,7 +519,7 @@ export default function ProductForm({ categories, product }: { categories: Categ
                     </div>
 
                     {/* Options for Dropdown/Radio */}
-                    {(field.type === "DROPDOWN" || field.type === "RADIO") && (
+                    {(field.type === "DROPDOWN" || field.type === "RADIO" || field.type === "COLOR_PICKER") && (
                       <div className="border-t border-gray-100 pt-3">
                         <div className="flex items-center justify-between mb-2">
                           <p className="text-xs font-medium text-gray-500">Options</p>
@@ -433,12 +539,21 @@ export default function ProductForm({ categories, product }: { categories: Categ
                                 value={opt.label}
                                 onChange={(e) => updateOption(index, oi, "label", e.target.value)}
                               />
-                              <input
-                                className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-400"
-                                placeholder="Value"
-                                value={opt.value}
-                                onChange={(e) => updateOption(index, oi, "value", e.target.value)}
-                              />
+                              {field.type === "COLOR_PICKER" ? (
+                                <input
+                                  className="w-16 h-8 border border-gray-200 rounded-lg cursor-pointer"
+                                  type="color"
+                                  value={opt.value || "#000000"}
+                                  onChange={(e) => updateOption(index, oi, "value", e.target.value)}
+                                />
+                              ) : (
+                                <input
+                                  className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-400"
+                                  placeholder="Value"
+                                  value={opt.value}
+                                  onChange={(e) => updateOption(index, oi, "value", e.target.value)}
+                                />
+                              )}
                               <input
                                 className="w-20 border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-400"
                                 placeholder="+₹ price"

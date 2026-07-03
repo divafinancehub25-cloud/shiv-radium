@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { ShoppingCart, Upload, ChevronDown } from "lucide-react";
+import { useState, useRef, useMemo } from "react";
+import { ShoppingCart, Upload, ChevronDown, ChevronUp, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 type Field = {
@@ -26,6 +26,18 @@ type Product = {
   category: { name: string; icon: string | null; slug: string };
 };
 
+// Map font option values/labels to real font families for live preview
+function fontFamilyFor(value: string): string {
+  const v = value.toLowerCase();
+  if (v.includes("playfair")) return "'Playfair Display', serif";
+  if (v.includes("courier")) return "'Courier New', monospace";
+  if (v.includes("amatic")) return "'Amatic SC', cursive";
+  if (v.includes("dancing")) return "'Dancing Script', cursive";
+  if (v.includes("poppins")) return "'Poppins', sans-serif";
+  if (v.includes("arial")) return "Arial, sans-serif";
+  return value || "inherit";
+}
+
 export default function CustomizerTool({ product }: { product: Product }) {
   const router = useRouter();
   const [values, setValues] = useState<Record<string, string>>({});
@@ -33,8 +45,34 @@ export default function CustomizerTool({ product }: { product: Product }) {
   const [quantity, setQuantity] = useState(1);
   const [selectedImage, setSelectedImage] = useState(0);
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
+  const [fontOpen, setFontOpen] = useState<Record<string, boolean>>({});
   const uploadingRef = useRef(uploading);
   uploadingRef.current = uploading;
+
+  // ── Detect special fields for live preview ──
+  const textFields = useMemo(
+    () => product.fields.filter((f) => f.type === "TEXT" || f.type === "TEXTAREA"),
+    [product.fields]
+  );
+  const fontField = useMemo(
+    () => product.fields.find((f) => f.type === "DROPDOWN" && /font/i.test(f.fieldKey + " " + f.label)),
+    [product.fields]
+  );
+  const textColorField = useMemo(() => {
+    const pickers = product.fields.filter((f) => f.type === "COLOR_PICKER");
+    return pickers.find((f) => /text/i.test(f.fieldKey + " " + f.label)) ?? pickers[0];
+  }, [product.fields]);
+  const imageField = useMemo(
+    () => product.fields.find((f) => f.type === "IMAGE_UPLOAD"),
+    [product.fields]
+  );
+
+  const previewFont = fontField ? fontFamilyFor(values[fontField.fieldKey] ?? "") : "inherit";
+  const previewColor = textColorField ? (values[textColorField.fieldKey] || "#1a1a1a") : "#1a1a1a";
+  const previewImage = imageField ? values[imageField.fieldKey] : null;
+  const previewTextLines = textFields
+    .map((f) => ({ key: f.fieldKey, text: values[f.fieldKey] ?? "" }))
+    .filter((l) => l.text.trim());
 
   function setValue(key: string, val: string) {
     setValues((prev) => ({ ...prev, [key]: val }));
@@ -86,9 +124,17 @@ export default function CustomizerTool({ product }: { product: Product }) {
   }
 
   const inputClass = "w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent bg-white";
+  let sectionNo = 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Google Fonts for live preview */}
+      {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+      <link
+        href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Amatic+SC:wght@400;700&family=Dancing+Script&family=Poppins:wght@400;600&display=swap"
+        rel="stylesheet"
+      />
+
       {/* Breadcrumb */}
       <div className="max-w-7xl mx-auto px-4 py-3 text-sm text-gray-400">
         <span className="hover:text-orange-500 cursor-pointer" onClick={() => router.push("/")}>Home</span>
@@ -100,10 +146,9 @@ export default function CustomizerTool({ product }: { product: Product }) {
 
       <div className="max-w-7xl mx-auto px-4 pb-16 grid lg:grid-cols-2 gap-10">
 
-        {/* Left: Product Image */}
+        {/* ── Left: LIVE PREVIEW ── */}
         <div className="space-y-4">
-          {/* Main Image */}
-          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm relative">
             {product.images?.[selectedImage] ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -116,6 +161,45 @@ export default function CustomizerTool({ product }: { product: Product }) {
                 <span className="text-8xl">{product.category.icon}</span>
               </div>
             )}
+
+            {/* Live overlay: uploaded photo + text lines */}
+            {(previewTextLines.length > 0 || previewImage) && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-[18%] pointer-events-none">
+                {previewImage && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={previewImage}
+                    alt="Your upload"
+                    className="max-w-[60%] max-h-[45%] object-contain rounded shadow-lg"
+                  />
+                )}
+                {previewTextLines.map((line) => (
+                  <div
+                    key={line.key}
+                    className="bg-white/85 backdrop-blur-[2px] border border-gray-300 rounded-lg px-4 py-1.5 flex items-center gap-2 shadow pointer-events-auto"
+                  >
+                    <span
+                      className="text-2xl md:text-3xl leading-tight"
+                      style={{ fontFamily: previewFont, color: previewColor }}
+                    >
+                      {line.text}
+                    </span>
+                    <button
+                      onClick={() => setValue(line.key, "")}
+                      className="text-gray-400 hover:text-red-500 transition-colors"
+                      title="Remove"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Live badge */}
+            <div className="absolute top-3 left-3 bg-orange-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider shadow">
+              ● Live Preview
+            </div>
           </div>
 
           {/* Thumbnail strip */}
@@ -152,35 +236,52 @@ export default function CustomizerTool({ product }: { product: Product }) {
           </div>
         </div>
 
-        {/* Right: Customization Form */}
+        {/* ── Right: Customization Form ── */}
         <div className="space-y-5">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
             <h2 className="text-lg font-bold text-gray-900 mb-1">Customize Your Order</h2>
-            <p className="text-sm text-gray-400 mb-6">Fill in the details below — we&apos;ll craft it exactly as you want</p>
+            <p className="text-sm text-gray-400 mb-6">Jaise type karoge, waise hi left preview mein dikhega ✨</p>
 
-            <div className="space-y-5">
+            <div className="space-y-6">
               {product.fields.map((field) => {
                 if (field.type === "QUANTITY") return null;
+                sectionNo++;
 
                 return (
                   <div key={field.id}>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                      {field.label}
-                      {field.isRequired && <span className="text-red-400 ml-1">*</span>}
-                    </label>
-
-                    {field.helpText && (
-                      <p className="text-xs text-gray-400 mb-1.5">{field.helpText}</p>
-                    )}
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-6 h-6 bg-gray-900 text-white text-xs font-bold rounded-full flex items-center justify-center shrink-0">
+                        {sectionNo}
+                      </span>
+                      <label className="text-sm font-bold text-gray-900">
+                        {field.label}
+                        {field.isRequired && <span className="text-red-400 ml-1">*</span>}
+                      </label>
+                      {field.helpText && (
+                        <span className="text-xs text-gray-400 hidden sm:inline">— {field.helpText}</span>
+                      )}
+                    </div>
 
                     {field.type === "TEXT" && (
-                      <input
-                        type="text"
-                        placeholder={field.placeholder ?? ""}
-                        value={values[field.fieldKey] ?? ""}
-                        onChange={(e) => setValue(field.fieldKey, e.target.value)}
-                        className={inputClass}
-                      />
+                      <div>
+                        <input
+                          type="text"
+                          placeholder={field.placeholder ?? "Add your custom text..."}
+                          value={values[field.fieldKey] ?? ""}
+                          onChange={(e) => setValue(field.fieldKey, e.target.value)}
+                          className={inputClass}
+                        />
+                        {values[field.fieldKey] && (
+                          <div className="mt-2 flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5">
+                            <span className="text-sm text-gray-700" style={{ fontFamily: previewFont, color: previewColor }}>
+                              {values[field.fieldKey]}
+                            </span>
+                            <button onClick={() => setValue(field.fieldKey, "")} className="text-gray-400 hover:text-red-500">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     )}
 
                     {field.type === "TEXTAREA" && (
@@ -212,7 +313,40 @@ export default function CustomizerTool({ product }: { product: Product }) {
                       />
                     )}
 
-                    {field.type === "DROPDOWN" && (
+                    {/* Font dropdown — options rendered in their own font */}
+                    {field.type === "DROPDOWN" && field === fontField && (
+                      <div className="relative">
+                        <button
+                          onClick={() => setFontOpen((p) => ({ ...p, [field.fieldKey]: !p[field.fieldKey] }))}
+                          className={inputClass + " flex items-center justify-between text-left"}
+                        >
+                          <span style={{ fontFamily: fontFamilyFor(values[field.fieldKey] ?? "") }}>
+                            {field.options.find((o) => o.value === values[field.fieldKey])?.label ?? (field.placeholder || "Select font style...")}
+                          </span>
+                          {fontOpen[field.fieldKey] ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                        </button>
+                        {fontOpen[field.fieldKey] && (
+                          <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+                            {field.options.map((o) => (
+                              <button
+                                key={o.id}
+                                onClick={() => {
+                                  setValue(field.fieldKey, o.value);
+                                  setFontOpen((p) => ({ ...p, [field.fieldKey]: false }));
+                                }}
+                                className={`w-full text-left px-4 py-2.5 text-lg hover:bg-orange-50 transition-colors ${values[field.fieldKey] === o.value ? "bg-orange-50" : ""}`}
+                                style={{ fontFamily: fontFamilyFor(o.value) }}
+                              >
+                                {o.label}{o.price ? <span className="text-xs text-gray-400 font-sans"> +₹{o.price}</span> : null}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Normal dropdown */}
+                    {field.type === "DROPDOWN" && field !== fontField && (
                       <div className="relative">
                         <select
                           value={values[field.fieldKey] ?? ""}
@@ -248,18 +382,25 @@ export default function CustomizerTool({ product }: { product: Product }) {
                       </div>
                     )}
 
+                    {/* Color swatches with names below (like reference) */}
                     {field.type === "COLOR_PICKER" && (
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-4">
                         {field.options.length > 0 ? field.options.map((o) => (
                           <button
                             key={o.id}
-                            title={o.label}
                             onClick={() => setValue(field.fieldKey, o.value)}
-                            style={{ background: o.value }}
-                            className={`w-10 h-10 rounded-xl border-2 transition-transform hover:scale-110 ${
-                              values[field.fieldKey] === o.value ? "border-orange-500 scale-110" : "border-gray-200"
-                            }`}
-                          />
+                            className="flex flex-col items-center gap-1.5 group"
+                          >
+                            <span
+                              style={{ background: o.value }}
+                              className={`w-12 h-12 rounded-xl border-2 transition-transform group-hover:scale-110 shadow-sm ${
+                                values[field.fieldKey] === o.value ? "border-orange-500 ring-2 ring-orange-200 scale-110" : "border-gray-200"
+                              }`}
+                            />
+                            <span className={`text-[10px] leading-tight text-center max-w-[60px] ${values[field.fieldKey] === o.value ? "text-orange-600 font-semibold" : "text-gray-500"}`}>
+                              {o.label}
+                            </span>
+                          </button>
                         )) : (
                           <input
                             type="color"
@@ -272,24 +413,40 @@ export default function CustomizerTool({ product }: { product: Product }) {
                     )}
 
                     {field.type === "IMAGE_UPLOAD" && (
-                      <label className="flex items-center gap-3 border-2 border-dashed border-gray-200 rounded-xl p-4 cursor-pointer hover:border-orange-400 hover:bg-orange-50 transition-colors">
-                        <Upload className="w-5 h-5 text-gray-400" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-700">
-                            {uploading[field.fieldKey] ? "Uploading..." : values[field.fieldKey] ? "Photo uploaded ✓" : "Upload your photo"}
-                          </p>
-                          <p className="text-xs text-gray-400">JPG, PNG supported</p>
-                        </div>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleFileUpload(field.fieldKey, file);
-                          }}
-                        />
-                      </label>
+                      <div>
+                        <label className="flex items-center gap-3 border-2 border-dashed border-gray-200 rounded-xl p-4 cursor-pointer hover:border-orange-400 hover:bg-orange-50 transition-colors">
+                          <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center">
+                            <Upload className="w-5 h-5 text-gray-500" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-700">
+                              {uploading[field.fieldKey] ? "Uploading..." : values[field.fieldKey] ? "Photo uploaded ✓ (click to change)" : "Upload Image..."}
+                            </p>
+                            <p className="text-xs text-gray-400">Select or drag an image here — JPG, PNG</p>
+                          </div>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleFileUpload(field.fieldKey, file);
+                            }}
+                          />
+                        </label>
+                        {values[field.fieldKey] && (
+                          <div className="mt-2 relative inline-block">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={values[field.fieldKey]} alt="Uploaded" className="w-20 h-20 object-cover rounded-xl border border-gray-200" />
+                            <button
+                              onClick={() => setValue(field.fieldKey, "")}
+                              className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 shadow"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     )}
 
                     {errors[field.fieldKey] && (
