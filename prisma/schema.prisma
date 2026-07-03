@@ -85,6 +85,10 @@ model Product {
   deliveryDays Int      @default(5)
   // Where customization text/photo appears on the live preview
   previewPosition String @default("center")
+  // Customizer feature toggles (drag, textSize, photoZoom, whatsappBadge) — admin on/off
+  features        Json?
+  // Ready-made sample design images shown to customer for inspiration
+  sampleDesigns   String[] @default([])
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -110,6 +114,8 @@ model ProductField {
   helpText    String?
   isRequired  Boolean   @default(true)
   sortOrder   Int       @default(0)
+  // For IMAGE_UPLOAD: how many photos customer can upload (watch = multiple)
+  maxFiles    Int       @default(1)
   options     FieldOption[]
 
   @@unique([productId, fieldKey])

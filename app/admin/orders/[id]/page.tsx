@@ -98,15 +98,29 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
                     .map(([k, v]) => (
                       <div key={k}>
                         <p className="text-xs text-gray-400 capitalize">{k.replace(/_/g, " ")}</p>
-                        {v.startsWith("http") ? (
-                          <div>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={v} alt={k} className="w-20 h-20 object-cover rounded-lg border border-gray-200 mt-1" />
-                            <a href={v} target="_blank" rel="noopener noreferrer" className="text-xs text-orange-500 underline block mt-1">View Full</a>
-                          </div>
-                        ) : (
-                          <p className="text-xs font-medium text-gray-700">{v}</p>
-                        )}
+                        {(() => {
+                          // Multi-photo fields store a JSON array of URLs
+                          let urls: string[] = [];
+                          if (v.startsWith("[")) {
+                            try { const a = JSON.parse(v); if (Array.isArray(a)) urls = a.filter((u: string) => typeof u === "string" && u.startsWith("http")); } catch {}
+                          } else if (v.startsWith("http")) {
+                            urls = [v];
+                          }
+                          if (urls.length > 0) {
+                            return (
+                              <div className="flex flex-wrap gap-2 mt-1">
+                                {urls.map((u, ui) => (
+                                  <div key={ui}>
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={u} alt={`${k} ${ui + 1}`} className="w-20 h-20 object-cover rounded-lg border border-gray-200" />
+                                    <a href={u} target="_blank" rel="noopener noreferrer" className="text-xs text-orange-500 underline block mt-1">View Full</a>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          }
+                          return <p className="text-xs font-medium text-gray-700">{v}</p>;
+                        })()}
                       </div>
                     ))}
                 </div>

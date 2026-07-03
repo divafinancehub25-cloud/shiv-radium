@@ -7,7 +7,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const body = await req.json();
-    const { name, slug, description, basePrice, categoryId, deliveryDays, isActive, isFeatured, images, fields, previewPosition } = body;
+    const { name, slug, description, basePrice, categoryId, deliveryDays, isActive, isFeatured, images, fields, previewPosition, features, sampleDesigns } = body;
 
     await db.product.update({
       where: { id },
@@ -22,6 +22,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         isFeatured,
         images: images ?? [],
         previewPosition: previewPosition || "center",
+        features: features ?? undefined,
+        sampleDesigns: sampleDesigns ?? [],
       },
     });
 
@@ -44,6 +46,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           helpText: f.helpText || null,
           isRequired: f.isRequired,
           sortOrder: i,
+          maxFiles: parseInt(f.maxFiles) || 1,
         },
       });
       for (let j = 0; j < (f.options ?? []).length; j++) {

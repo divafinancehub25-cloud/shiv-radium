@@ -12,6 +12,7 @@ type Field = {
   placeholder: string | null;
   helpText: string | null;
   isRequired: boolean;
+  maxFiles?: number;
   options: { id: string; label: string; value: string; price: number | null }[];
 };
 
@@ -25,6 +26,8 @@ type Product = {
   fields: Field[];
   category: { name: string; icon: string | null; slug: string };
   previewPosition?: string;
+  features?: { drag?: boolean; textSize?: boolean; photoZoom?: boolean; whatsappBadge?: boolean } | null;
+  sampleDesigns?: string[];
 };
 
 // Default overlay coordinates (%) per admin-set position
@@ -61,8 +64,29 @@ export default function CustomizerTool({ product }: { product: Product }) {
   const [qualityWarning, setQualityWarning] = useState<Record<string, string>>({});
   // Drag layout: per element position/size on the preview (percent coords)
   const [layout, setLayout] = useState<Record<string, LayoutItem>>({});
+  const [sampleView, setSampleView] = useState<string | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<string | null>(null);
+
+  // Admin-controlled feature toggles (default: all on)
+  const feat = {
+    drag: true, textSize: true, photoZoom: true, whatsappBadge: true,
+    ...(product.features ?? {}),
+  };
+
+  // Multi-photo helpers: values[key] holds a single URL or a JSON array of URLs
+  function getPhotos(key: string): string[] {
+    const v = values[key];
+    if (!v) return [];
+    if (v.startsWith("[")) {
+      try { const a = JSON.parse(v); return Array.isArray(a) ? a : [v]; } catch { return [v]; }
+    }
+    return [v];
+  }
+  function setPhotos(key: string, arr: string[]) {
+    setValues((prev) => ({ ...prev, [key]: arr.length === 0 ? "" : arr.length === 1 ? arr[0] : JSON.stringify(arr) }));
+    setErrors((prev) => ({ ...prev, [key]: "" }));
+  }
   const uploadingRef = useRef(uploading);
   uploadingRef.current = uploading;
 
@@ -79,14 +103,17 @@ export default function CustomizerTool({ product }: { product: Product }) {
     const pickers = product.fields.filter((f) => f.type === "COLOR_PICKER");
     return pickers.find((f) => /text/i.test(f.fieldKey + " " + f.label)) ?? pickers[0];
   }, [product.fields]);
-  const imageField = useMemo(
-    () => product.fields.find((f) => f.type === "IMAGE_UPLOAD"),
+  const imageFields = useMemo(
+    () => product.fields.filter((f) => f.type === "IMAGE_UPLOAD"),
     [product.fields]
   );
 
   const previewFont = fontField ? fontFamilyFor(values[fontField.fieldKey] ?? "") : "inherit";
   const previewColor = textColorField ? (values[textColorField.fieldKey] || "#1a1a1a") : "#1a1a1a";
-  const previewImage = imageField ? values[imageField.fieldKey] : null;
+  // All uploaded photos across all IMAGE_UPLOAD fields, each individually draggable
+  const previewPhotos = imageFields.flatMap((f) =>
+    getPhotos(f.fieldKey).map((url, i) => ({ key: `__photo_${f.fieldKey}_${i}`, url }))
+  );
   const previewTextLines = textFields
     .map((f) => ({ key: f.fieldKey, text: values[f.fieldKey] ?? "" }))
     .filter((l) => l.text.trim());
@@ -147,7 +174,7 @@ export default function CustomizerTool({ product }: { product: Product }) {
     img.src = url;
   }
 
-  async function handleFileUpload(fieldKey: string, file: File) {
+  async function handleFileUpload(fieldKey: string, file: File, maxFiles: number) {
     checkPhotoQuality(fieldKey, file);
     setUploading((prev) => ({ ...prev, [fieldKey]: true }));
     const formData = new FormData();
@@ -155,7 +182,12 @@ export default function CustomizerTool({ product }: { product: Product }) {
     const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
     const data = await res.json();
     if (res.ok && data.url) {
-      setValue(fieldKey, data.url);
+      if (maxFiles > 1) {
+        const existing = getPhotos(fieldKey);
+        setPhotos(fieldKey, [...existing, data.url].slice(0, maxFiles));
+      } else {
+        setValue(fieldKey, data.url);
+      }
     }
     setUploading((prev) => ({ ...prev, [fieldKey]: false }));
   }
@@ -226,7 +258,10 @@ export default function CustomizerTool({ product }: { product: Product }) {
             onPointerLeave={endDrag}
             className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm relative"
           >
-            {product.images?.[selectedImage] ? (
+            {sampleView ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={sampleView} alt="Sample design" className="w-full aspect-square object-cover" />
+            ) : product.images?.[selectedImage] ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={product.images[selectedImage]}
@@ -239,37 +274,38 @@ export default function CustomizerTool({ product }: { product: Product }) {
               </div>
             )}
 
-            {/* Live overlay: draggable uploaded photo + text chips */}
-            {previewImage && (() => {
-              const p = getPos("__photo", 0);
-              const scale = layout["__photo"]?.scale ?? 1;
+            {/* Live overlay: draggable uploaded photos + text chips */}
+            {previewPhotos.map((photo, pi) => {
+              const p = getPos(photo.key, pi);
+              const scale = layout[photo.key]?.scale ?? 1;
               return (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={previewImage}
+                  key={photo.key}
+                  src={photo.url}
                   alt="Your upload"
                   draggable={false}
-                  onPointerDown={(e) => startDrag("__photo", e)}
+                  onPointerDown={feat.drag ? (e) => startDrag(photo.key, e) : undefined}
                   style={{
                     left: `${p.x}%`,
                     top: `${p.y}%`,
                     transform: `translate(-50%, -50%) scale(${scale})`,
                     touchAction: "none",
                   }}
-                  className="absolute max-w-[55%] max-h-[45%] object-contain rounded shadow-lg cursor-move select-none"
+                  className={`absolute max-w-[45%] max-h-[40%] object-contain rounded shadow-lg select-none ${feat.drag ? "cursor-move" : ""}`}
                 />
               );
-            })()}
+            })}
             {previewTextLines.map((line, i) => {
-              const idx = previewImage ? i + 1 : i;
+              const idx = previewPhotos.length + i;
               const p = getPos(line.key, idx);
               const size = layout[line.key]?.size ?? 26;
               return (
                 <div
                   key={line.key}
-                  onPointerDown={(e) => startDrag(line.key, e)}
+                  onPointerDown={feat.drag ? (e) => startDrag(line.key, e) : undefined}
                   style={{ left: `${p.x}%`, top: `${p.y}%`, transform: "translate(-50%, -50%)", touchAction: "none" }}
-                  className="absolute bg-white/85 backdrop-blur-[2px] border border-gray-300 rounded-lg px-3 py-1 flex items-center gap-2 shadow cursor-move select-none"
+                  className={`absolute bg-white/85 backdrop-blur-[2px] border border-gray-300 rounded-lg px-3 py-1 flex items-center gap-2 shadow select-none ${feat.drag ? "cursor-move" : ""}`}
                 >
                   <span
                     className="leading-tight whitespace-nowrap"
@@ -288,16 +324,25 @@ export default function CustomizerTool({ product }: { product: Product }) {
                 </div>
               );
             })}
-            {(previewTextLines.length > 0 || previewImage) && (
+            {feat.drag && (previewTextLines.length > 0 || previewPhotos.length > 0) && (
               <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 text-white text-[10px] px-3 py-1 rounded-full pointer-events-none">
                 ✥ Drag karke jagah set karo
               </div>
             )}
 
-            {/* Live badge */}
-            <div className="absolute top-3 left-3 bg-orange-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider shadow">
-              ● Live Preview
-            </div>
+            {/* Live badge / sample close */}
+            {sampleView ? (
+              <button
+                onClick={() => setSampleView(null)}
+                className="absolute top-3 left-3 bg-gray-900 text-white text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-wider shadow"
+              >
+                ✕ Sample band karo
+              </button>
+            ) : (
+              <div className="absolute top-3 left-3 bg-orange-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider shadow">
+                ● Live Preview
+              </div>
+            )}
           </div>
 
           {/* Thumbnail strip */}
@@ -313,6 +358,26 @@ export default function CustomizerTool({ product }: { product: Product }) {
                   <img src={img} alt="" className="w-full h-full object-cover" />
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* Sample Designs */}
+          {(product.sampleDesigns?.length ?? 0) > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+              <p className="text-sm font-bold text-gray-900 mb-1">✨ Sample Designs</p>
+              <p className="text-xs text-gray-400 mb-3">Inspiration ke liye dekho — aisa hi aapke naam/photo ke saath banega</p>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {product.sampleDesigns!.map((img, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setSampleView(sampleView === img ? null : img)}
+                    className={`w-20 h-20 rounded-xl overflow-hidden border-2 shrink-0 transition-colors ${sampleView === img ? "border-orange-500" : "border-gray-200 hover:border-orange-300"}`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={img} alt={`Sample ${i + 1}`} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -333,7 +398,7 @@ export default function CustomizerTool({ product }: { product: Product }) {
             </div>
 
             {/* WhatsApp design approval trust badge */}
-            <div className="mt-4 bg-green-50 border border-green-200 rounded-xl p-3 flex items-start gap-2.5">
+            {feat.whatsappBadge && <div className="mt-4 bg-green-50 border border-green-200 rounded-xl p-3 flex items-start gap-2.5">
               <span className="text-xl">💬</span>
               <div>
                 <p className="text-sm font-semibold text-green-800">WhatsApp Design Approval</p>
@@ -341,7 +406,7 @@ export default function CustomizerTool({ product }: { product: Product }) {
                   Order ke baad hum final design WhatsApp pe bhejenge — aapke approval ke baad hi product banega. 100% satisfaction!
                 </p>
               </div>
-            </div>
+            </div>}
           </div>
         </div>
 
@@ -391,7 +456,7 @@ export default function CustomizerTool({ product }: { product: Product }) {
                               </button>
                             </div>
                             {/* Text size slider */}
-                            <div className="mt-2 flex items-center gap-3 px-1">
+                            {feat.textSize && <div className="mt-2 flex items-center gap-3 px-1">
                               <span className="text-xs text-gray-500 shrink-0">Text Size</span>
                               <input
                                 type="range"
@@ -402,7 +467,7 @@ export default function CustomizerTool({ product }: { product: Product }) {
                                 className="flex-1 accent-orange-500"
                               />
                               <span className="text-xs font-semibold text-gray-700 w-10 text-right">{layout[field.fieldKey]?.size ?? 26}px</span>
-                            </div>
+                            </div>}
                           </>
                         )}
                       </div>
@@ -536,62 +601,86 @@ export default function CustomizerTool({ product }: { product: Product }) {
                       </div>
                     )}
 
-                    {field.type === "IMAGE_UPLOAD" && (
-                      <div>
-                        <label className="flex items-center gap-3 border-2 border-dashed border-gray-200 rounded-xl p-4 cursor-pointer hover:border-orange-400 hover:bg-orange-50 transition-colors">
-                          <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center">
-                            <Upload className="w-5 h-5 text-gray-500" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-gray-700">
-                              {uploading[field.fieldKey] ? "Uploading..." : values[field.fieldKey] ? "Photo uploaded ✓ (click to change)" : "Upload Image..."}
-                            </p>
-                            <p className="text-xs text-gray-400">Select or drag an image here — JPG, PNG</p>
-                          </div>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) handleFileUpload(field.fieldKey, file);
-                            }}
-                          />
-                        </label>
-                        {qualityWarning[field.fieldKey] && (
-                          <div className="mt-2 bg-amber-50 border border-amber-200 text-amber-700 text-xs px-3 py-2 rounded-xl">
-                            {qualityWarning[field.fieldKey]}
-                          </div>
-                        )}
-                        {values[field.fieldKey] && (
-                          <div className="mt-2 flex items-center gap-3 px-1">
-                            <span className="text-xs text-gray-500 shrink-0">Photo Zoom</span>
-                            <input
-                              type="range"
-                              min={0.5}
-                              max={2}
-                              step={0.05}
-                              value={layout["__photo"]?.scale ?? 1}
-                              onChange={(e) => updateLayout("__photo", 0, { scale: Number(e.target.value) })}
-                              className="flex-1 accent-orange-500"
-                            />
-                            <span className="text-xs font-semibold text-gray-700 w-10 text-right">{Math.round((layout["__photo"]?.scale ?? 1) * 100)}%</span>
-                          </div>
-                        )}
-                        {values[field.fieldKey] && (
-                          <div className="mt-2 relative inline-block">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={values[field.fieldKey]} alt="Uploaded" className="w-20 h-20 object-cover rounded-xl border border-gray-200" />
-                            <button
-                              onClick={() => setValue(field.fieldKey, "")}
-                              className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 shadow"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    {field.type === "IMAGE_UPLOAD" && (() => {
+                      const maxFiles = field.maxFiles ?? 1;
+                      const photos = getPhotos(field.fieldKey);
+                      const canAddMore = photos.length < maxFiles;
+                      return (
+                        <div>
+                          {canAddMore && (
+                            <label className="flex items-center gap-3 border-2 border-dashed border-gray-200 rounded-xl p-4 cursor-pointer hover:border-orange-400 hover:bg-orange-50 transition-colors">
+                              <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center">
+                                <Upload className="w-5 h-5 text-gray-500" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-700">
+                                  {uploading[field.fieldKey] ? "Uploading..." : "Upload Image..."}
+                                </p>
+                                <p className="text-xs text-gray-400">
+                                  JPG, PNG {maxFiles > 1 ? `— ${photos.length}/${maxFiles} photos uploaded` : ""}
+                                </p>
+                              </div>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleFileUpload(field.fieldKey, file, maxFiles);
+                                  e.target.value = "";
+                                }}
+                              />
+                            </label>
+                          )}
+                          {!canAddMore && maxFiles > 1 && (
+                            <p className="text-xs text-green-600 font-medium">✓ Saari {maxFiles} photos upload ho gayi</p>
+                          )}
+                          {qualityWarning[field.fieldKey] && (
+                            <div className="mt-2 bg-amber-50 border border-amber-200 text-amber-700 text-xs px-3 py-2 rounded-xl">
+                              {qualityWarning[field.fieldKey]}
+                            </div>
+                          )}
+                          {photos.length > 0 && (
+                            <div className="mt-3 space-y-3">
+                              {photos.map((url, pi) => {
+                                const photoKey = `__photo_${field.fieldKey}_${pi}`;
+                                return (
+                                  <div key={photoKey} className="flex items-center gap-3">
+                                    <div className="relative shrink-0">
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img src={url} alt={`Photo ${pi + 1}`} className="w-16 h-16 object-cover rounded-xl border border-gray-200" />
+                                      <button
+                                        onClick={() => setPhotos(field.fieldKey, photos.filter((_, x) => x !== pi))}
+                                        className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 shadow"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                    {feat.photoZoom && (
+                                      <div className="flex-1 flex items-center gap-2">
+                                        <span className="text-xs text-gray-500 shrink-0">Zoom</span>
+                                        <input
+                                          type="range"
+                                          min={0.5}
+                                          max={2}
+                                          step={0.05}
+                                          value={layout[photoKey]?.scale ?? 1}
+                                          onChange={(e) => updateLayout(photoKey, pi, { scale: Number(e.target.value) })}
+                                          className="flex-1 accent-orange-500"
+                                        />
+                                        <span className="text-xs font-semibold text-gray-700 w-10 text-right">
+                                          {Math.round((layout[photoKey]?.scale ?? 1) * 100)}%
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {errors[field.fieldKey] && (
                       <p className="text-red-500 text-xs mt-1">{errors[field.fieldKey]}</p>

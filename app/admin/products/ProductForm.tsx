@@ -99,8 +99,18 @@ type Field = {
   helpText: string | null;
   isRequired: boolean;
   sortOrder: number;
+  maxFiles?: number;
   options: Option[];
 };
+
+type Features = { drag: boolean; textSize: boolean; photoZoom: boolean; whatsappBadge: boolean };
+const DEFAULT_FEATURES: Features = { drag: true, textSize: true, photoZoom: true, whatsappBadge: true };
+const FEATURE_LABELS: { key: keyof Features; label: string; desc: string }[] = [
+  { key: "drag", label: "🖐️ Drag & Drop", desc: "Customer text/photo ko preview pe khich sake" },
+  { key: "textSize", label: "🔠 Text Size Slider", desc: "Text chhota/bada karne ka slider" },
+  { key: "photoZoom", label: "🔍 Photo Zoom", desc: "Photo zoom in/out slider" },
+  { key: "whatsappBadge", label: "💬 WhatsApp Approval Badge", desc: "Design approval trust badge" },
+];
 type Category = { id: string; name: string; icon: string | null };
 type Product = {
   id: string;
@@ -115,6 +125,8 @@ type Product = {
   images: string[];
   fields: Field[];
   previewPosition?: string;
+  features?: Partial<Features> | null;
+  sampleDesigns?: string[];
 };
 
 const PREVIEW_POSITIONS = [
@@ -150,10 +162,26 @@ export default function ProductForm({ categories, product }: { categories: Categ
   );
 
   const [images, setImages] = useState<string[]>(product?.images ?? []);
+  const [sampleDesigns, setSampleDesigns] = useState<string[]>(product?.sampleDesigns ?? []);
+  const [features, setFeatures] = useState<Features>({ ...DEFAULT_FEATURES, ...(product?.features ?? {}) });
+  const [uploadingSample, setUploadingSample] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [expandedField, setExpandedField] = useState<number | null>(null);
+
+  async function handleSampleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingSample(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
+    const data = await res.json();
+    if (res.ok && data.url) setSampleDesigns((prev) => [...prev, data.url]);
+    else setError("Sample upload failed");
+    setUploadingSample(false);
+  }
 
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -257,7 +285,7 @@ export default function ProductForm({ categories, product }: { categories: Categ
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, images, fields }),
+        body: JSON.stringify({ ...form, images, fields, features, sampleDesigns }),
       });
 
       const data = await res.json();
@@ -415,6 +443,64 @@ export default function ProductForm({ categories, product }: { categories: Categ
           </div>
         </div>
 
+        {/* Customizer Feature Toggles */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-6">
+          <h2 className="font-semibold text-gray-900 mb-1">Customizer Features — On/Off</h2>
+          <p className="text-xs text-gray-400 mb-4">Is product ke customer page pe kaun se features chalenge</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {FEATURE_LABELS.map((f) => (
+              <label
+                key={f.key}
+                className={`flex items-start gap-3 p-3 border-2 rounded-xl cursor-pointer transition-colors ${
+                  features[f.key] ? "border-orange-400 bg-orange-50" : "border-gray-200"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={features[f.key]}
+                  onChange={(e) => setFeatures((prev) => ({ ...prev, [f.key]: e.target.checked }))}
+                  className="w-4 h-4 accent-orange-500 mt-0.5"
+                />
+                <div>
+                  <p className="text-sm font-medium text-gray-800">{f.label}</p>
+                  <p className="text-xs text-gray-400">{f.desc}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Sample Designs */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-6">
+          <h2 className="font-semibold text-gray-900 mb-1">Sample Designs</h2>
+          <p className="text-xs text-gray-400 mb-4">Ready-made design samples — customer inspiration ke liye dekh sakta hai (&ldquo;Isme apna naam daalo&rdquo; style)</p>
+          <div className="flex flex-wrap gap-3">
+            {sampleDesigns.map((img, i) => (
+              <div key={i} className="relative w-24 h-24 rounded-xl overflow-hidden border border-gray-200">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={img} alt="" className="w-full h-full object-cover" />
+                <button
+                  onClick={() => setSampleDesigns((prev) => prev.filter((_, idx) => idx !== i))}
+                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+            <label className="w-24 h-24 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-orange-400 transition-colors">
+              {uploadingSample ? (
+                <span className="text-xs text-gray-400">Uploading...</span>
+              ) : (
+                <>
+                  <Upload className="w-5 h-5 text-gray-300 mb-1" />
+                  <span className="text-xs text-gray-400">Add Sample</span>
+                </>
+              )}
+              <input type="file" accept="image/*" className="hidden" onChange={handleSampleUpload} disabled={uploadingSample} />
+            </label>
+          </div>
+        </div>
+
         {/* Custom Fields */}
         <div className="bg-white rounded-2xl border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
@@ -537,6 +623,20 @@ export default function ProductForm({ categories, product }: { categories: Categ
                           onChange={(e) => updateField(index, "helpText", e.target.value)}
                         />
                       </div>
+                      {field.type === "IMAGE_UPLOAD" && (
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Max Photos (kitni photos upload kar sake)</label>
+                          <input
+                            className={inputClass}
+                            type="number"
+                            min={1}
+                            max={10}
+                            placeholder="1"
+                            value={field.maxFiles ?? 1}
+                            onChange={(e) => updateField(index, "maxFiles", e.target.value)}
+                          />
+                        </div>
+                      )}
                       <div className="col-span-2">
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input
