@@ -27,14 +27,16 @@ type Product = {
   previewPosition?: string;
 };
 
-// Overlay placement classes per admin-set position
-const POSITION_CLASSES: Record<string, string> = {
-  top: "items-center justify-start pt-[12%]",
-  center: "items-center justify-center",
-  bottom: "items-center justify-end pb-[12%]",
-  left: "items-start justify-center pl-[8%]",
-  right: "items-end justify-center pr-[8%]",
+// Default overlay coordinates (%) per admin-set position
+const POSITION_DEFAULTS: Record<string, { x: number; y: number }> = {
+  top: { x: 50, y: 22 },
+  center: { x: 50, y: 50 },
+  bottom: { x: 50, y: 78 },
+  left: { x: 28, y: 50 },
+  right: { x: 72, y: 50 },
 };
+
+type LayoutItem = { x: number; y: number; size?: number; scale?: number };
 
 // Map font option values/labels to real font families for live preview
 function fontFamilyFor(value: string): string {
@@ -57,6 +59,10 @@ export default function CustomizerTool({ product }: { product: Product }) {
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [fontOpen, setFontOpen] = useState<Record<string, boolean>>({});
   const [qualityWarning, setQualityWarning] = useState<Record<string, string>>({});
+  // Drag layout: per element position/size on the preview (percent coords)
+  const [layout, setLayout] = useState<Record<string, LayoutItem>>({});
+  const previewRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<string | null>(null);
   const uploadingRef = useRef(uploading);
   uploadingRef.current = uploading;
 
@@ -84,6 +90,38 @@ export default function CustomizerTool({ product }: { product: Product }) {
   const previewTextLines = textFields
     .map((f) => ({ key: f.fieldKey, text: values[f.fieldKey] ?? "" }))
     .filter((l) => l.text.trim());
+
+  function defaultPos(index: number): { x: number; y: number } {
+    const base = POSITION_DEFAULTS[product.previewPosition ?? "center"] ?? POSITION_DEFAULTS.center;
+    return { x: base.x, y: Math.min(90, base.y + index * 12) };
+  }
+
+  function getPos(key: string, index: number): LayoutItem {
+    return layout[key] ?? defaultPos(index);
+  }
+
+  function updateLayout(key: string, index: number, patch: Partial<LayoutItem>) {
+    setLayout((prev) => ({ ...prev, [key]: { ...defaultPos(index), ...prev[key], ...patch } }));
+  }
+
+  function startDrag(key: string, e: React.PointerEvent) {
+    e.preventDefault();
+    dragRef.current = key;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function onDragMove(e: React.PointerEvent) {
+    if (!dragRef.current || !previewRef.current) return;
+    const r = previewRef.current.getBoundingClientRect();
+    const x = Math.max(3, Math.min(97, ((e.clientX - r.left) / r.width) * 100));
+    const y = Math.max(3, Math.min(97, ((e.clientY - r.top) / r.height) * 100));
+    const key = dragRef.current;
+    setLayout((prev) => ({ ...prev, [key]: { ...prev[key], x, y } }));
+  }
+
+  function endDrag() {
+    dragRef.current = null;
+  }
 
   function setValue(key: string, val: string) {
     setValues((prev) => ({ ...prev, [key]: val }));
@@ -148,7 +186,9 @@ export default function CustomizerTool({ product }: { product: Product }) {
         quantity,
         unitPrice: product.basePrice,
         totalPrice: product.basePrice * quantity,
-        customizationData: values,
+        customizationData: Object.keys(layout).length > 0
+          ? { ...values, _layout: JSON.stringify(layout) }
+          : values,
       },
     ]));
     router.push("/cart");
@@ -179,7 +219,13 @@ export default function CustomizerTool({ product }: { product: Product }) {
 
         {/* ── Left: LIVE PREVIEW ── */}
         <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm relative">
+          <div
+            ref={previewRef}
+            onPointerMove={onDragMove}
+            onPointerUp={endDrag}
+            onPointerLeave={endDrag}
+            className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm relative"
+          >
             {product.images?.[selectedImage] ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -193,37 +239,58 @@ export default function CustomizerTool({ product }: { product: Product }) {
               </div>
             )}
 
-            {/* Live overlay: uploaded photo + text lines */}
-            {(previewTextLines.length > 0 || previewImage) && (
-              <div className={`absolute inset-0 flex flex-col gap-2 p-[10%] pointer-events-none ${POSITION_CLASSES[product.previewPosition ?? "center"] ?? POSITION_CLASSES.center}`}>
-                {previewImage && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={previewImage}
-                    alt="Your upload"
-                    className="max-w-[60%] max-h-[45%] object-contain rounded shadow-lg"
-                  />
-                )}
-                {previewTextLines.map((line) => (
-                  <div
-                    key={line.key}
-                    className="bg-white/85 backdrop-blur-[2px] border border-gray-300 rounded-lg px-4 py-1.5 flex items-center gap-2 shadow pointer-events-auto"
+            {/* Live overlay: draggable uploaded photo + text chips */}
+            {previewImage && (() => {
+              const p = getPos("__photo", 0);
+              const scale = layout["__photo"]?.scale ?? 1;
+              return (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={previewImage}
+                  alt="Your upload"
+                  draggable={false}
+                  onPointerDown={(e) => startDrag("__photo", e)}
+                  style={{
+                    left: `${p.x}%`,
+                    top: `${p.y}%`,
+                    transform: `translate(-50%, -50%) scale(${scale})`,
+                    touchAction: "none",
+                  }}
+                  className="absolute max-w-[55%] max-h-[45%] object-contain rounded shadow-lg cursor-move select-none"
+                />
+              );
+            })()}
+            {previewTextLines.map((line, i) => {
+              const idx = previewImage ? i + 1 : i;
+              const p = getPos(line.key, idx);
+              const size = layout[line.key]?.size ?? 26;
+              return (
+                <div
+                  key={line.key}
+                  onPointerDown={(e) => startDrag(line.key, e)}
+                  style={{ left: `${p.x}%`, top: `${p.y}%`, transform: "translate(-50%, -50%)", touchAction: "none" }}
+                  className="absolute bg-white/85 backdrop-blur-[2px] border border-gray-300 rounded-lg px-3 py-1 flex items-center gap-2 shadow cursor-move select-none"
+                >
+                  <span
+                    className="leading-tight whitespace-nowrap"
+                    style={{ fontFamily: previewFont, color: previewColor, fontSize: `${size}px` }}
                   >
-                    <span
-                      className="text-2xl md:text-3xl leading-tight"
-                      style={{ fontFamily: previewFont, color: previewColor }}
-                    >
-                      {line.text}
-                    </span>
-                    <button
-                      onClick={() => setValue(line.key, "")}
-                      className="text-gray-400 hover:text-red-500 transition-colors"
-                      title="Remove"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                    {line.text}
+                  </span>
+                  <button
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => setValue(line.key, "")}
+                    className="text-gray-400 hover:text-red-500 transition-colors"
+                    title="Remove"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              );
+            })}
+            {(previewTextLines.length > 0 || previewImage) && (
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 text-white text-[10px] px-3 py-1 rounded-full pointer-events-none">
+                ✥ Drag karke jagah set karo
               </div>
             )}
 
@@ -314,14 +381,29 @@ export default function CustomizerTool({ product }: { product: Product }) {
                           className={inputClass}
                         />
                         {values[field.fieldKey] && (
-                          <div className="mt-2 flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5">
-                            <span className="text-sm text-gray-700" style={{ fontFamily: previewFont, color: previewColor }}>
-                              {values[field.fieldKey]}
-                            </span>
-                            <button onClick={() => setValue(field.fieldKey, "")} className="text-gray-400 hover:text-red-500">
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
+                          <>
+                            <div className="mt-2 flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5">
+                              <span className="text-sm text-gray-700" style={{ fontFamily: previewFont, color: previewColor }}>
+                                {values[field.fieldKey]}
+                              </span>
+                              <button onClick={() => setValue(field.fieldKey, "")} className="text-gray-400 hover:text-red-500">
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                            {/* Text size slider */}
+                            <div className="mt-2 flex items-center gap-3 px-1">
+                              <span className="text-xs text-gray-500 shrink-0">Text Size</span>
+                              <input
+                                type="range"
+                                min={14}
+                                max={64}
+                                value={layout[field.fieldKey]?.size ?? 26}
+                                onChange={(e) => updateLayout(field.fieldKey, textFields.findIndex((tf) => tf.fieldKey === field.fieldKey), { size: Number(e.target.value) })}
+                                className="flex-1 accent-orange-500"
+                              />
+                              <span className="text-xs font-semibold text-gray-700 w-10 text-right">{layout[field.fieldKey]?.size ?? 26}px</span>
+                            </div>
+                          </>
                         )}
                       </div>
                     )}
@@ -479,6 +561,21 @@ export default function CustomizerTool({ product }: { product: Product }) {
                         {qualityWarning[field.fieldKey] && (
                           <div className="mt-2 bg-amber-50 border border-amber-200 text-amber-700 text-xs px-3 py-2 rounded-xl">
                             {qualityWarning[field.fieldKey]}
+                          </div>
+                        )}
+                        {values[field.fieldKey] && (
+                          <div className="mt-2 flex items-center gap-3 px-1">
+                            <span className="text-xs text-gray-500 shrink-0">Photo Zoom</span>
+                            <input
+                              type="range"
+                              min={0.5}
+                              max={2}
+                              step={0.05}
+                              value={layout["__photo"]?.scale ?? 1}
+                              onChange={(e) => updateLayout("__photo", 0, { scale: Number(e.target.value) })}
+                              className="flex-1 accent-orange-500"
+                            />
+                            <span className="text-xs font-semibold text-gray-700 w-10 text-right">{Math.round((layout["__photo"]?.scale ?? 1) * 100)}%</span>
                           </div>
                         )}
                         {values[field.fieldKey] && (

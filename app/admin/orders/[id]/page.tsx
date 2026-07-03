@@ -94,7 +94,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
                 {/* Customization data */}
                 <div className="bg-orange-50 rounded-xl p-3 grid grid-cols-2 md:grid-cols-3 gap-2">
                   {Object.entries(customData)
-                    .filter(([, v]) => v)
+                    .filter(([k, v]) => v && k !== "_layout")
                     .map(([k, v]) => (
                       <div key={k}>
                         <p className="text-xs text-gray-400 capitalize">{k.replace(/_/g, " ")}</p>
@@ -110,6 +110,26 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
                       </div>
                     ))}
                 </div>
+                {/* Customer-set design layout (drag positions/sizes) */}
+                {customData._layout && (() => {
+                  let parsed: Record<string, { x: number; y: number; size?: number; scale?: number }> = {};
+                  try { parsed = JSON.parse(customData._layout); } catch { return null; }
+                  return (
+                    <div className="mt-2 bg-blue-50 border border-blue-100 rounded-xl p-3">
+                      <p className="text-xs font-semibold text-blue-700 mb-1.5">📐 Design Layout (customer ne set kiya)</p>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5 text-xs text-gray-600">
+                        {Object.entries(parsed).map(([k, l]) => (
+                          <p key={k}>
+                            <span className="capitalize font-medium">{k === "__photo" ? "Photo" : k.replace(/_/g, " ")}</span>:{" "}
+                            {Math.round(l.x)}% / {Math.round(l.y)}%
+                            {l.size ? `, ${l.size}px` : ""}
+                            {l.scale ? `, zoom ${Math.round(l.scale * 100)}%` : ""}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             );
           })}
