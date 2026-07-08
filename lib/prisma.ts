@@ -1,13 +1,18 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaNeonHttp } from "@prisma/adapter-neon";
+import { PrismaNeon } from "@prisma/adapter-neon";
+import { neonConfig } from "@neondatabase/serverless";
+import ws from "ws";
+
+// WebSocket mode — required so Prisma transactions work (HTTP mode does not
+// support them, which caused deposits/withdrawals/register to hang).
+neonConfig.webSocketConstructor = ws;
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
 function createPrismaClient() {
-  // PrismaNeonHttp requires (connectionString, config) — pass empty config as second arg
-  const adapter = new PrismaNeonHttp(process.env.DATABASE_URL!, {});
+  const adapter = new PrismaNeon({ connectionString: process.env.DATABASE_URL! });
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],

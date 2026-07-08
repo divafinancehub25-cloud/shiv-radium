@@ -71,11 +71,15 @@ export function RegisterForm() {
     }
 
     setLoading(true);
-    const result = await registerUser(parsed.data);
-    setLoading(false);
-
-    if (result.error) { setServerError(result.error); return; }
-    router.push(`/diva-app/verify-email/sent?email=${encodeURIComponent(form.email)}`);
+    try {
+      const result = await registerUser(parsed.data);
+      setLoading(false);
+      if (result.error) { setServerError(result.error); return; }
+      router.push(`/diva-app/verify-email/sent?email=${encodeURIComponent(form.email)}`);
+    } catch (err: any) {
+      setLoading(false);
+      setServerError(err?.message ? `Error: ${err.message}` : "Kuch galat hua. Thodi der baad try karein.");
+    }
   }
 
   return (
