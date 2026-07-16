@@ -31,9 +31,12 @@ export type FrameElement = {
   fill?: string;
   // image box: admin's default image (customer can replace it)
   defaultImage?: string;
+  // zoom of the image inside the box (cursor-resizable)
+  imgScale?: number;
 };
 
-export type CustomFont = { label: string; family: string; url: string };
+// url = Google Fonts stylesheet; dataUrl = uploaded font file (.ttf/.otf/.woff)
+export type CustomFont = { label: string; family: string; url?: string; dataUrl?: string };
 
 export type CustomerOptions = {
   frameColors: { allowed: string[]; default: string };
@@ -41,6 +44,8 @@ export type CustomerOptions = {
   fonts: { allowed: string[]; default: string };
   textSizes: { allowed: { label: string; px: number }[]; default: number };
   customFonts: CustomFont[];
+  // canvas aspect ratio = bg image's natural width/height (no cropping)
+  bgAspect?: number;
 };
 
 export const TEXT_SIZE_PRESETS = [
@@ -57,7 +62,18 @@ function defaultOptions(): CustomerOptions {
     fonts: { allowed: ["Arial, sans-serif", "'Playfair Display', serif", "'Dancing Script', cursive"], default: "Arial, sans-serif" },
     textSizes: { allowed: TEXT_SIZE_PRESETS.slice(0, 3), default: 24 },
     customFonts: [],
+    bgAspect: 1,
   };
+}
+
+// Read natural aspect ratio (w/h) of an image URL
+function readAspect(url: string): Promise<number> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img.naturalHeight > 0 ? img.naturalWidth / img.naturalHeight : 1);
+    img.onerror = () => resolve(1);
+    img.src = url;
+  });
 }
 
 type Template = {
@@ -82,6 +98,35 @@ const DEFAULT_COLORS = ["#7b2fbe", "#2ab3c9", "#f97316", "#1c1c1c", "#2a5fc1", "
 let uid = 0;
 function newId() {
   return `el_${Date.now()}_${uid++}`;
+}
+
+// Small hex-code input with live swatch preview + Add button
+function ColorCodeInput({ onAdd }: { onAdd: (hex: string) => void }) {
+  const [code, setCode] = useState("");
+  const valid = /^#[0-9a-fA-F]{6}$/.test(code);
+  return (
+    <div className="flex items-center gap-1.5">
+      <span style={{ background: valid ? code : "#fff" }} className="w-6 h-6 rounded border border-gray-200 shrink-0" />
+      <input
+        className="flex-1 border border-gray-200 rounded-lg px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-orange-400"
+        placeholder="#ff6b2c"
+        value={code}
+        onChange={(e) => {
+          let v = e.target.value.trim();
+          if (v && !v.startsWith("#")) v = "#" + v;
+          setCode(v.slice(0, 7));
+        }}
+        onKeyDown={(e) => { if (e.key === "Enter" && valid) { onAdd(code.toLowerCase()); setCode(""); } }}
+      />
+      <button
+        disabled={!valid}
+        onClick={() => { onAdd(code.toLowerCase()); setCode(""); }}
+        className="text-[10px] font-semibold bg-gray-900 disabled:opacity-40 text-white px-2 py-1 rounded-lg"
+      >
+        Add
+      </button>
+    </div>
+  );
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -110,7 +155,7 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
   }
 
   const canvasRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{ id: string; mode: "move" | "resize"; startX: number; startY: number; orig: FrameElement } | null>(null);
+  const dragRef = useRef<{ id: string; mode: "move" | "resize" | "imgscale"; startX: number; startY: number; orig: FrameElement } | null>(null);
 
   const selected = elements.find((e) => e.id === selectedId) ?? null;
 
@@ -199,7 +244,13 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
   }
 
   // ── Drag / Resize ──
-  function startDrag(id: string, mode: "move" | "resize", e: React.PointerEvent) {
+  async function setBgWithAspect(url: string | null) {
+    setBgImage(url);
+    const aspect = url ? await readAspect(url) : 1;
+    setOptions((o) => ({ ...o, bgAspect: aspect }));
+  }
+
+  function startDrag(id: string, mode: "move" | "resize" | "imgscale", e: React.PointerEvent) {
     e.stopPropagation();
     e.preventDefault();
     const el = elements.find((x) => x.id === id);
@@ -219,6 +270,9 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
       if (el.id !== d.id) return el;
       if (d.mode === "move") {
         return { ...el, x: Math.max(-20, Math.min(95, d.orig.x + dx)), y: Math.max(-20, Math.min(95, d.orig.y + dy)) };
+      }
+      if (d.mode === "imgscale") {
+        return { ...el, imgScale: Math.max(0.3, Math.min(4, (d.orig.imgScale ?? 1) + dx / 30)) };
       }
       return { ...el, w: Math.max(4, Math.min(140, d.orig.w + dx)), h: Math.max(3, Math.min(140, d.orig.h + dy)) };
     }));
@@ -284,8 +338,17 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
       >
         {el.type === "image" && (
           el.defaultImage ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={el.defaultImage} alt={el.label} draggable={false} style={{ borderRadius }} className="w-full h-full object-cover" />
+            <div style={{ borderRadius }} className="w-full h-full overflow-hidden relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={el.defaultImage} alt={el.label} draggable={false} style={{ transform: `scale(${el.imgScale ?? 1})` }} className="w-full h-full object-cover" />
+              {isSel && (
+                <div
+                  onPointerDown={(e) => startDrag(el.id, "imgscale", e)}
+                  title="Image zoom — drag karo"
+                  className="absolute bottom-1 right-1 w-4 h-4 bg-blue-500 border-2 border-white rounded-full cursor-ew-resize shadow"
+                />
+              )}
+            </div>
           ) : (
             <div style={{ borderRadius }} className="w-full h-full bg-gray-200/90 border-2 border-dashed border-gray-400 flex flex-col items-center justify-center overflow-hidden">
               <ImageIcon className="w-5 h-5 text-gray-500" />
@@ -323,10 +386,15 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
         href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Amatic+SC:wght@400;700&family=Dancing+Script&family=Poppins:wght@400;600&display=swap"
         rel="stylesheet"
       />
-      {options.customFonts.map((f) => (
+      {options.customFonts.filter((f) => f.url).map((f) => (
         // eslint-disable-next-line @next/next/no-page-custom-font
         <link key={f.url} href={f.url} rel="stylesheet" />
       ))}
+      {options.customFonts.some((f) => f.dataUrl) && (
+        <style>{options.customFonts.filter((f) => f.dataUrl).map((f) =>
+          `@font-face{font-family:${f.family.split(",")[0]};src:url(${f.dataUrl});font-display:swap;}`
+        ).join("\n")}</style>
+      )}
 
       <div className="flex items-center justify-between mb-1">
         <h2 className="font-semibold text-gray-900">🖼️ Frame Designer</h2>
@@ -407,15 +475,15 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
                   if (!file) return;
                   setUploadingBg(true);
                   const url = await uploadFile(file);
-                  if (url) setBgImage(url);
+                  if (url) await setBgWithAspect(url);
                   setUploadingBg(false);
                   e.target.value = "";
                 }}
               />
             </label>
             <div className="flex gap-1.5">
-              <button onClick={() => setBgImage(productImage)} className="flex-1 text-[10px] border border-gray-200 rounded-lg py-1 hover:bg-gray-50">Product image</button>
-              <button onClick={() => setBgImage(null)} className="flex-1 text-[10px] border border-gray-200 rounded-lg py-1 hover:bg-gray-50">Blank</button>
+              <button onClick={() => setBgWithAspect(productImage)} className="flex-1 text-[10px] border border-gray-200 rounded-lg py-1 hover:bg-gray-50">Product image</button>
+              <button onClick={() => setBgWithAspect(null)} className="flex-1 text-[10px] border border-gray-200 rounded-lg py-1 hover:bg-gray-50">Blank</button>
             </div>
             {bgImage && (
               // eslint-disable-next-line @next/next/no-img-element
@@ -435,9 +503,9 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
             className="relative bg-white shadow-lg shrink-0 overflow-hidden"
             style={{
               width: 420 * zoom,
-              height: 420 * zoom,
+              height: (420 / (options.bgAspect || 1)) * zoom,
               backgroundImage: bgImage ? `url(${bgImage})` : "repeating-conic-gradient(#f3f4f6 0% 25%, #ffffff 0% 50%)",
-              backgroundSize: bgImage ? "cover" : "24px 24px",
+              backgroundSize: bgImage ? "100% 100%" : "24px 24px",
               backgroundPosition: "center",
             }}
           >
@@ -508,7 +576,19 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
                     />
                   </label>
                   {selected.defaultImage && (
-                    <button onClick={() => updateSelected({ defaultImage: undefined })} className="mt-1.5 text-[10px] text-red-500 hover:underline">✕ Image hatao</button>
+                    <>
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="text-[10px] text-gray-500 shrink-0">Image Zoom</span>
+                        <input
+                          type="range" min={0.3} max={4} step={0.05}
+                          value={selected.imgScale ?? 1}
+                          onChange={(e) => updateSelected({ imgScale: Number(e.target.value) })}
+                          className="flex-1 accent-orange-500"
+                        />
+                        <span className="text-[10px] font-semibold w-9 text-right">{Math.round((selected.imgScale ?? 1) * 100)}%</span>
+                      </div>
+                      <button onClick={() => updateSelected({ defaultImage: undefined, imgScale: undefined })} className="mt-1.5 text-[10px] text-red-500 hover:underline">✕ Image hatao</button>
+                    </>
                   )}
                 </div>
               )}
@@ -623,7 +703,9 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
                 className="w-8 h-8 rounded-lg border-2 border-dashed border-gray-300 cursor-pointer p-0"
               />
             </div>
-            <label className="block text-[10px] text-gray-500 mb-0.5">Default color</label>
+            {/* Editable color code */}
+            <ColorCodeInput onAdd={(c) => setOptions((o) => o.frameColors.allowed.includes(c) ? o : ({ ...o, frameColors: { ...o.frameColors, allowed: [...o.frameColors.allowed, c] } }))} />
+            <label className="block text-[10px] text-gray-500 mb-0.5 mt-2">Default color</label>
             <div className="flex flex-wrap gap-1.5">
               {options.frameColors.allowed.map((c) => (
                 <button key={c} onClick={() => setOptions((o) => ({ ...o, frameColors: { ...o.frameColors, default: c } }))} style={{ background: c }} className={`w-5 h-5 rounded border ${options.frameColors.default === c ? "border-orange-500 scale-110" : "border-gray-200"}`} />
@@ -654,7 +736,9 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
                 className="w-8 h-8 rounded-lg border-2 border-dashed border-gray-300 cursor-pointer p-0"
               />
             </div>
-            <label className="block text-[10px] text-gray-500 mb-0.5">Default color</label>
+            {/* Editable color code */}
+            <ColorCodeInput onAdd={(c) => setOptions((o) => o.textColors.allowed.includes(c) ? o : ({ ...o, textColors: { ...o.textColors, allowed: [...o.textColors.allowed, c] } }))} />
+            <label className="block text-[10px] text-gray-500 mb-0.5 mt-2">Default color</label>
             <div className="flex flex-wrap gap-1.5">
               {options.textColors.allowed.map((c) => (
                 <button key={c} onClick={() => setOptions((o) => ({ ...o, textColors: { ...o.textColors, default: c } }))} style={{ background: c }} className={`w-5 h-5 rounded border ${options.textColors.default === c ? "border-orange-500 scale-110" : "border-gray-200"}`} />
@@ -718,6 +802,33 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
                 + Add Font
               </button>
             </div>
+            {/* Upload downloaded font files (.ttf/.otf/.woff) — multiple */}
+            <label className="mt-2 flex items-center justify-center gap-1.5 border-2 border-dashed border-gray-300 rounded-lg py-2 text-xs font-semibold cursor-pointer hover:border-orange-400 hover:bg-orange-50 transition-colors">
+              ⬆️ Font file upload karo (.ttf / .otf / .woff — multiple)
+              <input
+                type="file"
+                accept=".ttf,.otf,.woff,.woff2"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  for (const file of files) {
+                    const reader = new FileReader();
+                    const name = file.name.replace(/\.(ttf|otf|woff2?)$/i, "").replace(/[-_]/g, " ").trim();
+                    reader.onload = () => {
+                      const family = `'${name}', sans-serif`;
+                      setOptions((o) => o.customFonts.some((f) => f.family === family) ? o : ({
+                        ...o,
+                        customFonts: [...o.customFonts, { label: name, family, dataUrl: reader.result as string }],
+                        fonts: { ...o.fonts, allowed: [...o.fonts.allowed, family] },
+                      }));
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                  e.target.value = "";
+                }}
+              />
+            </label>
           </div>
 
           {/* Text Size */}

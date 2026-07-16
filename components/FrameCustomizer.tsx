@@ -16,6 +16,7 @@ type FrameElement = {
   align?: "left" | "center" | "right"; color?: string;
   shape?: "rect" | "ellipse" | "rounded"; fill?: string;
   defaultImage?: string;
+  imgScale?: number;
 };
 
 type CustomerOptions = {
@@ -23,7 +24,8 @@ type CustomerOptions = {
   textColors: { allowed: string[]; default: string };
   fonts: { allowed: string[]; default: string };
   textSizes: { allowed: { label: string; px: number }[]; default: number };
-  customFonts: { label: string; family: string; url: string }[];
+  customFonts: { label: string; family: string; url?: string; dataUrl?: string }[];
+  bgAspect?: number;
 };
 
 type Template = {
@@ -52,7 +54,7 @@ const FONT_LABELS: Record<string, string> = {
   "'Poppins', sans-serif": "Poppins",
 };
 
-type Overrides = Record<string, { image?: string; text?: string }>;
+type Overrides = Record<string, { image?: string; text?: string; scale?: number }>;
 
 export default function FrameCustomizer({ product, templates }: { product: Product; templates: Template[] }) {
   const router = useRouter();
@@ -67,6 +69,27 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
   const [quantity, setQuantity] = useState(1);
   const [uploading, setUploading] = useState<string | null>(null);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const scaleDragRef = useRef<{ elId: string; startX: number; orig: number } | null>(null);
+
+  function startScaleDrag(elId: string, currentScale: number, e: React.PointerEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    scaleDragRef.current = { elId, startX: e.clientX, orig: currentScale };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function onScaleDragMove(e: React.PointerEvent) {
+    const d = scaleDragRef.current;
+    if (!d || !canvasRef.current) return;
+    const r = canvasRef.current.getBoundingClientRect();
+    const dx = ((e.clientX - d.startX) / r.width) * 100;
+    setOverrides((p) => ({ ...p, [d.elId]: { ...p[d.elId], scale: Math.max(0.3, Math.min(4, d.orig + dx / 30)) } }));
+  }
+
+  function endScaleDrag() {
+    scaleDragRef.current = null;
+  }
 
   const template = templates[activeIdx];
   const opts = template.options;
@@ -105,6 +128,8 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
     for (const el of imageBoxes) {
       const img = (!useDefault && overrides[el.id]?.image) || el.defaultImage;
       if (img) customizationData[el.label] = img;
+      const scale = !useDefault ? overrides[el.id]?.scale : undefined;
+      if (scale && scale !== 1) customizationData[`${el.label} Zoom`] = `${Math.round(scale * 100)}%`;
     }
     if (!useDefault) {
       if (frameColor) customizationData["Frame Color"] = frameColor;
@@ -143,6 +168,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
     }
     if (el.type === "image") {
       const img = overrides[el.id]?.image ?? el.defaultImage;
+      const scale = overrides[el.id]?.scale ?? el.imgScale ?? 1;
       return (
         <div
           key={el.id}
@@ -151,8 +177,18 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
           className={customizing ? "cursor-pointer ring-2 ring-orange-400/70 hover:ring-orange-500" : ""}
         >
           {img ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={img} alt={el.label} style={{ borderRadius }} className="w-full h-full object-cover" />
+            <div style={{ borderRadius }} className="w-full h-full overflow-hidden relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={img} alt={el.label} draggable={false} style={{ transform: `scale(${scale})` }} className="w-full h-full object-cover" />
+              {customizing && (
+                <div
+                  onPointerDown={(e) => startScaleDrag(el.id, scale, e)}
+                  onClick={(e) => e.stopPropagation()}
+                  title="Photo zoom — drag karo"
+                  className="absolute bottom-1 right-1 w-5 h-5 bg-blue-500 border-2 border-white rounded-full cursor-ew-resize shadow z-10"
+                />
+              )}
+            </div>
           ) : (
             <div style={{ borderRadius }} className="w-full h-full bg-gray-100/80 border-2 border-dashed border-gray-300 flex items-center justify-center">
               <span className="text-[10px] text-gray-400 text-center px-1">{customizing ? "Tap to add photo" : el.label}</span>
@@ -192,43 +228,67 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
         href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Amatic+SC:wght@400;700&family=Dancing+Script&family=Poppins:wght@400;600&display=swap"
         rel="stylesheet"
       />
-      {(opts?.customFonts ?? []).map((f) => (
+      {(opts?.customFonts ?? []).filter((f) => f.url).map((f) => (
         // eslint-disable-next-line @next/next/no-page-custom-font
         <link key={f.url} href={f.url} rel="stylesheet" />
       ))}
+      {(opts?.customFonts ?? []).some((f) => f.dataUrl) && (
+        <style>{(opts?.customFonts ?? []).filter((f) => f.dataUrl).map((f) =>
+          `@font-face{font-family:${f.family.split(",")[0]};src:url(${f.dataUrl});font-display:swap;}`
+        ).join("\n")}</style>
+      )}
 
-      {/* ── Left: Design preview ── */}
+      {/* ── Left: Product image (default) / Design canvas (customizing) ── */}
       <div className="space-y-4">
-        {/* Template tabs */}
-        {templates.length > 1 && (
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {templates.map((t, i) => (
-              <button
-                key={t.id}
-                onClick={() => switchTemplate(i)}
-                className={`shrink-0 px-4 py-2 rounded-xl text-sm font-medium border-2 transition-colors ${i === activeIdx ? "border-orange-500 bg-orange-50 text-orange-600" : "border-gray-200 text-gray-600 hover:border-orange-300"}`}
-              >
-                {t.name}
-              </button>
-            ))}
+        {!customizing ? (
+          /* Normal product image — customize fields yahan nahi dikhte */
+          <div className="relative w-full aspect-square bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex items-center justify-center">
+            {product.images?.[0] ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={product.images[0]} alt={product.name} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-8xl">🎁</span>
+            )}
           </div>
-        )}
+        ) : (
+          <>
+            {/* Template tabs — customize mode mein hi */}
+            {templates.length > 1 && (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {templates.map((t, i) => (
+                  <button
+                    key={t.id}
+                    onClick={() => switchTemplate(i)}
+                    className={`shrink-0 px-4 py-2 rounded-xl text-sm font-medium border-2 transition-colors ${i === activeIdx ? "border-orange-500 bg-orange-50 text-orange-600" : "border-gray-200 text-gray-600 hover:border-orange-300"}`}
+                  >
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+            )}
 
-        <div
-          className="relative w-full aspect-square bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
-          style={{
-            backgroundImage: template.bgImage ? `url(${template.bgImage})` : undefined,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-          }}
-        >
-          {elements.map(renderElement)}
-          <div className="absolute top-3 left-3 bg-orange-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider shadow z-50">
-            {customizing ? "✏️ Customizing" : "● Ready Design"}
-          </div>
-        </div>
-        {customizing && imageBoxes.length > 0 && (
-          <p className="text-xs text-gray-400 text-center">📸 Photo change karne ke liye design mein photo pe tap karo</p>
+            <div
+              ref={canvasRef}
+              onPointerMove={onScaleDragMove}
+              onPointerUp={endScaleDrag}
+              onPointerLeave={endScaleDrag}
+              className="relative w-full bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
+              style={{
+                aspectRatio: `${opts?.bgAspect || 1}`,
+                backgroundImage: template.bgImage ? `url(${template.bgImage})` : undefined,
+                backgroundSize: "100% 100%",
+                backgroundPosition: "center",
+              }}
+            >
+              {elements.map(renderElement)}
+              <div className="absolute top-3 left-3 bg-orange-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider shadow z-50">
+                ✏️ Customizing
+              </div>
+            </div>
+            {imageBoxes.length > 0 && (
+              <p className="text-xs text-gray-400 text-center">📸 Photo pe tap = change • 🔵 blue dot drag = photo zoom</p>
+            )}
+          </>
         )}
 
         {/* Hidden file inputs per image box */}
