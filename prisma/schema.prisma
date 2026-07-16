@@ -92,12 +92,33 @@ model Product {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  fields     ProductField[]
-  orderItems OrderItem[]
+  fields         ProductField[]
+  orderItems     OrderItem[]
+  frameTemplates FrameTemplate[]
 
   @@index([categoryId])
   @@index([slug])
   @@index([isActive])
+}
+
+// ─── Frame Designer Templates ─────────────────────────────────────────────────
+// Admin-designed product templates: draggable image/text/frame elements on a canvas.
+// elements JSON: [{ id, type: "image"|"text"|"frame", label, x, y, w, h (percent),
+//   radius, rotation, z, text?, fontFamily?, fontSize?, fontWeight?, align?, color?,
+//   shape?, fill? }]
+
+model FrameTemplate {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String
+  elements  Json     @default("[]")
+  bgImage   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
 }
 
 // ─── Dynamic Field System ─────────────────────────────────────────────────────
