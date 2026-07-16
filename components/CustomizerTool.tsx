@@ -3,6 +3,7 @@
 import { useState, useRef, useMemo } from "react";
 import { ShoppingCart, Upload, ChevronDown, ChevronUp, X } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { PriceTag, ProductBadges, AttributePicker, effectivePrice, isOutOfStock, type ExtrasProduct } from "@/components/ProductExtras";
 
 type Field = {
   id: string;
@@ -28,7 +29,7 @@ type Product = {
   previewPosition?: string;
   features?: { drag?: boolean; textSize?: boolean; photoZoom?: boolean; whatsappBadge?: boolean } | null;
   sampleDesigns?: string[];
-};
+} & ExtrasProduct;
 
 // Default overlay coordinates (%) per admin-set position
 const POSITION_DEFAULTS: Record<string, { x: number; y: number }> = {
@@ -58,6 +59,9 @@ export default function CustomizerTool({ product }: { product: Product }) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [quantity, setQuantity] = useState(1);
+  const [selectedAttrs, setSelectedAttrs] = useState<Record<string, string>>({});
+  const price = effectivePrice(product);
+  const outOfStock = isOutOfStock(product);
   const [selectedImage, setSelectedImage] = useState(0);
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [fontOpen, setFontOpen] = useState<Record<string, boolean>>({});
@@ -215,12 +219,14 @@ export default function CustomizerTool({ product }: { product: Product }) {
         productName: product.name,
         productSlug: product.slug,
         productImage: product.images?.[0] ?? null,
-        quantity,
-        unitPrice: product.basePrice,
-        totalPrice: product.basePrice * quantity,
-        customizationData: Object.keys(layout).length > 0
-          ? { ...values, _layout: JSON.stringify(layout) }
-          : values,
+        quantity: product.soldIndividually ? 1 : quantity,
+        unitPrice: price,
+        totalPrice: price * (product.soldIndividually ? 1 : quantity),
+        customizationData: {
+          ...values,
+          ...selectedAttrs,
+          ...(Object.keys(layout).length > 0 ? { _layout: JSON.stringify(layout) } : {}),
+        },
       },
     ]));
     router.push("/cart");
@@ -387,10 +393,11 @@ export default function CustomizerTool({ product }: { product: Product }) {
               <span>{product.category.icon}</span> {product.category.name}
             </div>
             <h1 className="text-2xl font-bold text-gray-900 mb-3">{product.name}</h1>
-            <div className="flex items-center gap-4">
-              <span className="text-3xl font-bold text-orange-500">₹{product.basePrice}</span>
+            <div className="flex items-center gap-4 flex-wrap">
+              <PriceTag p={product} />
               <span className="text-sm text-gray-400 bg-gray-50 px-3 py-1 rounded-full">🚚 {product.deliveryDays} days delivery</span>
             </div>
+            <ProductBadges p={product} />
             <div className="flex items-center gap-4 mt-4 text-xs text-gray-500">
               <span>✅ 100% Customized</span>
               <span>🔒 Secure Payment</span>
@@ -691,34 +698,50 @@ export default function CustomizerTool({ product }: { product: Product }) {
             </div>
           </div>
 
+          {/* Attributes — Size / Quality / Colour / custom */}
+          {(product.attributes?.length ?? 0) > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <AttributePicker
+                attributes={product.attributes!}
+                selected={selectedAttrs}
+                onSelect={(name, value) => setSelectedAttrs((p) => ({ ...p, [name]: value }))}
+              />
+            </div>
+          )}
+
           {/* Quantity & Add to Cart */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <div className="flex items-center justify-between mb-5">
-              <span className="text-sm font-semibold text-gray-700">Quantity</span>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                  className="w-10 h-10 rounded-xl border-2 border-gray-200 flex items-center justify-center text-xl font-bold hover:border-orange-400 transition-colors"
-                >−</button>
-                <span className="w-8 text-center font-bold text-lg text-gray-900">{quantity}</span>
-                <button
-                  onClick={() => setQuantity((q) => q + 1)}
-                  className="w-10 h-10 rounded-xl border-2 border-gray-200 flex items-center justify-center text-xl font-bold hover:border-orange-400 transition-colors"
-                >+</button>
+            {product.soldIndividually ? (
+              <p className="text-xs text-gray-400 mb-5">1️⃣ Ye product ek order mein sirf 1 hi liya ja sakta hai</p>
+            ) : (
+              <div className="flex items-center justify-between mb-5">
+                <span className="text-sm font-semibold text-gray-700">Quantity</span>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                    className="w-10 h-10 rounded-xl border-2 border-gray-200 flex items-center justify-center text-xl font-bold hover:border-orange-400 transition-colors"
+                  >−</button>
+                  <span className="w-8 text-center font-bold text-lg text-gray-900">{quantity}</span>
+                  <button
+                    onClick={() => setQuantity((q) => q + 1)}
+                    className="w-10 h-10 rounded-xl border-2 border-gray-200 flex items-center justify-center text-xl font-bold hover:border-orange-400 transition-colors"
+                  >+</button>
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="flex justify-between items-center mb-5 pb-5 border-b border-gray-100">
               <span className="text-gray-600 font-medium">Total Amount</span>
-              <span className="text-3xl font-bold text-orange-500">₹{product.basePrice * quantity}</span>
+              <span className="text-3xl font-bold text-orange-500">₹{price * (product.soldIndividually ? 1 : quantity)}</span>
             </div>
 
             <button
               onClick={addToCart}
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg shadow-orange-200 text-base"
+              disabled={outOfStock}
+              className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg shadow-orange-200 text-base"
             >
               <ShoppingCart className="w-5 h-5" />
-              Add to Cart
+              {outOfStock ? "Out of Stock" : "Add to Cart"}
             </button>
 
             <div className="grid grid-cols-3 gap-3 mt-4 text-center text-xs text-gray-400">

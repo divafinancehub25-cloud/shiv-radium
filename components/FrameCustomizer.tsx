@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ShoppingCart, Upload, Zap, PenLine, X } from "lucide-react";
+import { PriceTag, ProductBadges, AttributePicker, effectivePrice, isOutOfStock, type ExtrasProduct } from "@/components/ProductExtras";
 
 // ─── Types (mirror of admin FrameDesigner) ──────────────────────────────────
 
@@ -45,7 +46,7 @@ type Product = {
   basePrice: number;
   deliveryDays: number;
   images: string[];
-};
+} & ExtrasProduct;
 
 const FONT_LABELS: Record<string, string> = {
   "Arial, sans-serif": "Arial",
@@ -69,6 +70,9 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
   const [font, setFont] = useState<string | null>(null);
   const [textSize, setTextSize] = useState<number | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [selectedAttrs, setSelectedAttrs] = useState<Record<string, string>>({});
+  const price = effectivePrice(product);
+  const outOfStock = isOutOfStock(product);
   const [uploading, setUploading] = useState<string | null>(null);
   const [fontOpen, setFontOpen] = useState(false);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -156,6 +160,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
       const oy = !useDefault ? overrides[el.id]?.offY : undefined;
       if ((ox && ox !== 0) || (oy && oy !== 0)) customizationData[`${el.label} Adjust`] = `${Math.round(ox ?? 0)}%, ${Math.round(oy ?? 0)}%`;
     }
+    for (const [k, v] of Object.entries(selectedAttrs)) customizationData[k] = v;
     if (!useDefault) {
       if (frameColor) customizationData["Frame Color"] = frameColor;
       if (textColor) customizationData["Text Color"] = textColor;
@@ -171,9 +176,9 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
         productName: product.name,
         productSlug: product.slug,
         productImage: template.bgImage ?? product.images?.[0] ?? null,
-        quantity,
-        unitPrice: product.basePrice,
-        totalPrice: product.basePrice * quantity,
+        quantity: product.soldIndividually ? 1 : quantity,
+        unitPrice: price,
+        totalPrice: price * (product.soldIndividually ? 1 : quantity),
         customizationData,
       },
     ]));
@@ -347,18 +352,31 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
       <div className="space-y-5">
         <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">{product.name}</h1>
-          <div className="flex items-center gap-4">
-            <span className="text-3xl font-bold text-orange-500">₹{product.basePrice}</span>
+          <div className="flex items-center gap-4 flex-wrap">
+            <PriceTag p={product} />
             <span className="text-sm text-gray-400 bg-gray-50 px-3 py-1 rounded-full">🚚 {product.deliveryDays} days delivery</span>
           </div>
+          <ProductBadges p={product} />
+
+          {/* Attributes — Size / Quality / Colour / custom */}
+          {(product.attributes?.length ?? 0) > 0 && (
+            <div className="mt-4 border-t border-gray-100 pt-4">
+              <AttributePicker
+                attributes={product.attributes!}
+                selected={selectedAttrs}
+                onSelect={(name, value) => setSelectedAttrs((p) => ({ ...p, [name]: value }))}
+              />
+            </div>
+          )}
 
           {/* Buy Now / Customize Now */}
           <div className="grid grid-cols-2 gap-3 mt-5">
             <button
               onClick={() => addToCart(true)}
-              className="flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 text-white font-bold py-3.5 rounded-xl transition-colors"
+              disabled={outOfStock}
+              className="flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl transition-colors"
             >
-              <Zap className="w-4 h-4" /> Buy Now
+              <Zap className="w-4 h-4" /> {outOfStock ? "Out of Stock" : "Buy Now"}
             </button>
             <button
               onClick={() => setCustomizing((c) => !c)}
@@ -521,23 +539,28 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
 
         {/* Quantity + Add to Cart */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-sm font-semibold text-gray-700">Quantity</span>
-            <div className="flex items-center gap-3">
-              <button onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="w-10 h-10 rounded-xl border-2 border-gray-200 flex items-center justify-center text-xl font-bold hover:border-orange-400 transition-colors">−</button>
-              <span className="w-8 text-center font-bold text-lg text-gray-900">{quantity}</span>
-              <button onClick={() => setQuantity((q) => q + 1)} className="w-10 h-10 rounded-xl border-2 border-gray-200 flex items-center justify-center text-xl font-bold hover:border-orange-400 transition-colors">+</button>
+          {product.soldIndividually ? (
+            <p className="text-xs text-gray-400 mb-4">1️⃣ Ye product ek order mein sirf 1 hi liya ja sakta hai</p>
+          ) : (
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-sm font-semibold text-gray-700">Quantity</span>
+              <div className="flex items-center gap-3">
+                <button onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="w-10 h-10 rounded-xl border-2 border-gray-200 flex items-center justify-center text-xl font-bold hover:border-orange-400 transition-colors">−</button>
+                <span className="w-8 text-center font-bold text-lg text-gray-900">{quantity}</span>
+                <button onClick={() => setQuantity((q) => q + 1)} className="w-10 h-10 rounded-xl border-2 border-gray-200 flex items-center justify-center text-xl font-bold hover:border-orange-400 transition-colors">+</button>
+              </div>
             </div>
-          </div>
+          )}
           <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-100">
             <span className="text-gray-600 font-medium">Total Amount</span>
-            <span className="text-3xl font-bold text-orange-500">₹{product.basePrice * quantity}</span>
+            <span className="text-3xl font-bold text-orange-500">₹{price * (product.soldIndividually ? 1 : quantity)}</span>
           </div>
           <button
             onClick={() => addToCart(!customizing)}
-            className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg shadow-orange-200"
+            disabled={outOfStock}
+            className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg shadow-orange-200"
           >
-            <ShoppingCart className="w-5 h-5" /> Add to Cart
+            <ShoppingCart className="w-5 h-5" /> {outOfStock ? "Out of Stock" : "Add to Cart"}
           </button>
 
           {/* WhatsApp trust badge */}

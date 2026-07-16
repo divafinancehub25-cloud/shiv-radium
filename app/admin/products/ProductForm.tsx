@@ -128,7 +128,24 @@ type Product = {
   previewPosition?: string;
   features?: Partial<Features> | null;
   sampleDesigns?: string[];
+  salePrice?: number | null;
+  discountPct?: number | null;
+  manageStock?: boolean;
+  stockQty?: number | null;
+  stockStatus?: string;
+  soldIndividually?: boolean;
+  shippingClass?: string | null;
+  shippingCost?: number | null;
+  codAvailable?: boolean;
+  weightGrams?: number | null;
+  lengthIn?: number | null;
+  widthIn?: number | null;
+  heightIn?: number | null;
+  noReturnPolicy?: boolean;
+  attributes?: { name: string; values: string[] }[] | null;
 };
+
+const ATTRIBUTE_QUICK = ["Size", "Quality", "Colour", "Custom"];
 
 const PREVIEW_POSITIONS = [
   { value: "top", label: "⬆️ Top", desc: "Text upar dikhega" },
@@ -156,7 +173,25 @@ export default function ProductForm({ categories, product }: { categories: Categ
     isActive: product?.isActive ?? true,
     isFeatured: product?.isFeatured ?? false,
     previewPosition: product?.previewPosition ?? "center",
+    salePrice: product?.salePrice?.toString() ?? "",
+    discountPct: product?.discountPct?.toString() ?? "",
+    manageStock: product?.manageStock ?? false,
+    stockQty: product?.stockQty?.toString() ?? "",
+    stockStatus: product?.stockStatus ?? "IN_STOCK",
+    soldIndividually: product?.soldIndividually ?? false,
+    shippingClass: product?.shippingClass ?? "",
+    shippingCost: product?.shippingCost?.toString() ?? "",
+    codAvailable: product?.codAvailable ?? true,
+    weightGrams: product?.weightGrams?.toString() ?? "",
+    lengthIn: product?.lengthIn?.toString() ?? "",
+    widthIn: product?.widthIn?.toString() ?? "",
+    heightIn: product?.heightIn?.toString() ?? "",
+    noReturnPolicy: product?.noReturnPolicy ?? false,
   });
+
+  const [attributes, setAttributes] = useState<{ name: string; valuesText: string }[]>(
+    (product?.attributes ?? []).map((a) => ({ name: a.name, valuesText: a.values.join(", ") }))
+  );
 
   const [fields, setFields] = useState<Field[]>(
     product?.fields ?? []
@@ -286,7 +321,12 @@ export default function ProductForm({ categories, product }: { categories: Categ
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, images, fields, features, sampleDesigns }),
+        body: JSON.stringify({
+          ...form, images, fields, features, sampleDesigns,
+          attributes: attributes
+            .map((a) => ({ name: a.name.trim(), values: a.valuesText.split(",").map((v) => v.trim()).filter(Boolean) }))
+            .filter((a) => a.name && a.values.length > 0),
+        }),
       });
 
       const data = await res.json();
@@ -349,13 +389,33 @@ export default function ProductForm({ categories, product }: { categories: Categ
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Base Price (₹) *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Regular Price (₹) *</label>
               <input
                 className={inputClass}
                 type="number"
                 placeholder="500"
                 value={form.basePrice}
                 onChange={(e) => setFormValue("basePrice", e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Sale Price (₹) <span className="text-gray-400 text-xs">(khaali = sale nahi)</span></label>
+              <input
+                className={inputClass}
+                type="number"
+                placeholder="399"
+                value={form.salePrice}
+                onChange={(e) => setFormValue("salePrice", e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Discount % <span className="text-gray-400 text-xs">(badge ke liye, optional)</span></label>
+              <input
+                className={inputClass}
+                type="number"
+                placeholder="20"
+                value={form.discountPct}
+                onChange={(e) => setFormValue("discountPct", e.target.value)}
               />
             </div>
             <div>
@@ -388,6 +448,117 @@ export default function ProductForm({ categories, product }: { categories: Categ
                 onChange={(e) => setFormValue("description", e.target.value)}
               />
             </div>
+          </div>
+        </div>
+
+        {/* Inventory / Stock */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-6">
+          <h2 className="font-semibold text-gray-900 mb-4">Inventory</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={form.manageStock} onChange={(e) => setFormValue("manageStock", e.target.checked)} className="w-4 h-4 accent-orange-500" />
+              <span className="text-sm text-gray-700">Manage stock <span className="text-gray-400 text-xs">(quantity track karo)</span></span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={form.soldIndividually} onChange={(e) => setFormValue("soldIndividually", e.target.checked)} className="w-4 h-4 accent-orange-500" />
+              <span className="text-sm text-gray-700">Sold individually <span className="text-gray-400 text-xs">(ek order mein sirf 1)</span></span>
+            </label>
+            {form.manageStock && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Stock Quantity</label>
+                <input className={inputClass} type="number" placeholder="10" value={form.stockQty} onChange={(e) => setFormValue("stockQty", e.target.value)} />
+              </div>
+            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Stock Status</label>
+              <select className={inputClass + " bg-white"} value={form.stockStatus} onChange={(e) => setFormValue("stockStatus", e.target.value)}>
+                <option value="IN_STOCK">In stock</option>
+                <option value="OUT_OF_STOCK">Out of stock</option>
+                <option value="ON_BACKORDER">On backorder</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Shipping & Delivery */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-6">
+          <h2 className="font-semibold text-gray-900 mb-4">Shipping & Delivery</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Shipping</label>
+              <select className={inputClass + " bg-white"} value={form.shippingClass} onChange={(e) => setFormValue("shippingClass", e.target.value)}>
+                <option value="">— Remove (default shipping)</option>
+                <option value="free">Free shipping</option>
+                <option value="flat">No shipping class cost (flat)</option>
+              </select>
+            </div>
+            {form.shippingClass === "flat" && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Shipping Cost (₹)</label>
+                <input className={inputClass} type="number" placeholder="50" value={form.shippingCost} onChange={(e) => setFormValue("shippingCost", e.target.value)} />
+              </div>
+            )}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={form.codAvailable} onChange={(e) => setFormValue("codAvailable", e.target.checked)} className="w-4 h-4 accent-orange-500" />
+              <span className="text-sm text-gray-700">💵 Cash on Delivery available</span>
+            </label>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Weight (g)</label>
+              <input className={inputClass} type="number" placeholder="500" value={form.weightGrams} onChange={(e) => setFormValue("weightGrams", e.target.value)} />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Dimensions (inch)</label>
+              <div className="grid grid-cols-3 gap-3">
+                <input className={inputClass} type="number" placeholder="Length" value={form.lengthIn} onChange={(e) => setFormValue("lengthIn", e.target.value)} />
+                <input className={inputClass} type="number" placeholder="Width" value={form.widthIn} onChange={(e) => setFormValue("widthIn", e.target.value)} />
+                <input className={inputClass} type="number" placeholder="Height" value={form.heightIn} onChange={(e) => setFormValue("heightIn", e.target.value)} />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={form.noReturnPolicy} onChange={(e) => setFormValue("noReturnPolicy", e.target.checked)} className="w-4 h-4 accent-orange-500" />
+              <span className="text-sm text-gray-700">🚫 No Return Policy <span className="text-gray-400 text-xs">(customer ko dikhega)</span></span>
+            </label>
+          </div>
+        </div>
+
+        {/* Attributes */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-6">
+          <h2 className="font-semibold text-gray-900 mb-1">Attributes</h2>
+          <p className="text-xs text-gray-400 mb-4">Size, Quality, Colour ya custom — jis product mein chahiye add karo, values comma se alag karo. Customer inhe choose karega.</p>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {ATTRIBUTE_QUICK.map((name) => (
+              <button
+                key={name}
+                onClick={() => setAttributes((p) => p.some((a) => a.name === name && name !== "Custom") ? p : [...p, { name: name === "Custom" ? "" : name, valuesText: "" }])}
+                className="text-xs font-semibold text-orange-500 border border-orange-300 hover:bg-orange-50 px-4 py-1.5 rounded-lg transition-colors"
+              >
+                + {name}
+              </button>
+            ))}
+          </div>
+          {attributes.length === 0 && (
+            <p className="text-xs text-gray-400 border-2 border-dashed border-gray-200 rounded-xl p-4 text-center">Koi attribute nahi — upar se add karo (remove karne ke liye 🗑️)</p>
+          )}
+          <div className="space-y-3">
+            {attributes.map((attr, i) => (
+              <div key={i} className="flex flex-col md:flex-row gap-2 items-start md:items-center border border-gray-100 rounded-xl p-3">
+                <input
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full md:w-36 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  placeholder="Attribute name"
+                  value={attr.name}
+                  onChange={(e) => setAttributes((p) => p.map((a, ai) => ai === i ? { ...a, name: e.target.value } : a))}
+                />
+                <input
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm flex-1 w-full focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  placeholder="Values — comma se alag (e.g. S, M, L, XL)"
+                  value={attr.valuesText}
+                  onChange={(e) => setAttributes((p) => p.map((a, ai) => ai === i ? { ...a, valuesText: e.target.value } : a))}
+                />
+                <button onClick={() => setAttributes((p) => p.filter((_, ai) => ai !== i))} className="text-gray-300 hover:text-red-500 p-1">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
           </div>
         </div>
 

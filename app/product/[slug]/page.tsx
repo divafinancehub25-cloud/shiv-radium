@@ -42,8 +42,27 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     options: (t.options as unknown as never) ?? null,
   }));
 
+  const extras = {
+    salePrice: product.salePrice ? Number(product.salePrice) : null,
+    discountPct: product.discountPct,
+    manageStock: product.manageStock,
+    stockQty: product.stockQty,
+    stockStatus: product.stockStatus,
+    soldIndividually: product.soldIndividually,
+    shippingClass: product.shippingClass,
+    shippingCost: product.shippingCost ? Number(product.shippingCost) : null,
+    codAvailable: product.codAvailable,
+    weightGrams: product.weightGrams,
+    lengthIn: product.lengthIn,
+    widthIn: product.widthIn,
+    heightIn: product.heightIn,
+    noReturnPolicy: product.noReturnPolicy,
+    attributes: (product.attributes as { name: string; values: string[] }[] | null) ?? null,
+  };
+
   const serializedProduct = {
     ...product,
+    ...extras,
     basePrice: Number(product.basePrice),
     fields: product.fields.map((f) => ({
       ...f,
@@ -80,6 +99,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               basePrice: Number(product.basePrice),
               deliveryDays: product.deliveryDays,
               images: product.images,
+              ...extras,
             }}
             templates={frameTemplates}
           />

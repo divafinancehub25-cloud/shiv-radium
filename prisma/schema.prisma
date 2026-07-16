@@ -87,6 +87,23 @@ model Product {
   previewPosition String @default("center")
   // Customizer feature toggles (drag, textSize, photoZoom, whatsappBadge) — admin on/off
   features        Json?
+  // ── WooCommerce-style optional features (null/false = feature removed) ──
+  salePrice        Decimal? @db.Decimal(10, 2)
+  discountPct      Int?
+  manageStock      Boolean  @default(false)
+  stockQty         Int?
+  stockStatus      String   @default("IN_STOCK") // IN_STOCK | OUT_OF_STOCK | ON_BACKORDER
+  soldIndividually Boolean  @default(false)
+  shippingClass    String?  // "free" | "flat"
+  shippingCost     Decimal? @db.Decimal(10, 2)
+  codAvailable     Boolean  @default(true)
+  weightGrams      Int?
+  lengthIn         Float?
+  widthIn          Float?
+  heightIn         Float?
+  noReturnPolicy   Boolean  @default(false)
+  // Product attributes: [{ name: "Size", values: ["S","M","L"] }] — size/quality/colour/custom
+  attributes       Json?
   // Ready-made sample design images shown to customer for inspiration
   sampleDesigns   String[] @default([])
   createdAt    DateTime @default(now())
