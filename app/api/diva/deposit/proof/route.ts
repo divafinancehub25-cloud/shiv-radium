@@ -3,17 +3,12 @@ import { auth } from "@/lib/auth";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { v4 as uuid } from "uuid";
 
-const s3 = new S3Client({
-  region: process.env.AWS_REGION ?? "auto",
-  endpoint: process.env.AWS_ENDPOINT_URL,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? "",
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? "",
-  },
-});
-
 const BUCKET = process.env.AWS_BUCKET_NAME ?? "";
-const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
+const S3_CONFIGURED = !!(
+  process.env.AWS_ACCESS_KEY_ID &&
+  process.env.AWS_SECRET_ACCESS_KEY &&
+  BUCKET
+);
 const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
 
 export async function POST(req: NextRequest) {
@@ -28,24 +23,39 @@ export async function POST(req: NextRequest) {
   if (!ALLOWED.includes(file.type)) {
     return NextResponse.json({ error: "Only JPEG/PNG/WebP images allowed" }, { status: 400 });
   }
-  if (file.size > MAX_SIZE) {
-    return NextResponse.json({ error: "File size exceeds 5 MB" }, { status: 400 });
+  // Keep under Vercel's serverless body limit (~4.5MB) when storing inline.
+  const maxSize = S3_CONFIGURED ? 5 * 1024 * 1024 : 4 * 1024 * 1024;
+  if (file.size > maxSize) {
+    return NextResponse.json({ error: `File size exceeds ${S3_CONFIGURED ? 5 : 4} MB` }, { status: 400 });
   }
 
-  const ext = file.name.split(".").pop() ?? "jpg";
-  const key = `diva/deposit-proofs/${session.user.id}/${uuid()}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  await s3.send(
-    new PutObjectCommand({
-      Bucket: BUCKET,
-      Key: key,
-      Body: buffer,
-      ContentType: file.type,
-      ACL: "private",
-    })
-  );
+  if (S3_CONFIGURED) {
+    const s3 = new S3Client({
+      region: process.env.AWS_REGION ?? "auto",
+      endpoint: process.env.AWS_ENDPOINT_URL,
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+      },
+    });
+    const ext = file.name.split(".").pop() ?? "jpg";
+    const key = `diva/deposit-proofs/${session.user.id}/${uuid()}.${ext}`;
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: BUCKET,
+        Key: key,
+        Body: buffer,
+        ContentType: file.type,
+        ACL: "private",
+      })
+    );
+    const url = `${process.env.AWS_PUBLIC_URL ?? `https://${BUCKET}.s3.amazonaws.com`}/${key}`;
+    return NextResponse.json({ url });
+  }
 
-  const url = `${process.env.AWS_PUBLIC_URL ?? `https://${BUCKET}.s3.amazonaws.com`}/${key}`;
-  return NextResponse.json({ url });
+  // Fallback: inline data URL (no external storage needed)
+  const dataUrl = `data:${file.type};base64,${buffer.toString("base64")}`;
+  return NextResponse.json({ url: dataUrl });
 }

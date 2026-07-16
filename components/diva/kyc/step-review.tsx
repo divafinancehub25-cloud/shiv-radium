@@ -22,7 +22,7 @@ export function StepReview() {
     if (result.error) { setError(result.error); return; }
     setSubmitted(true);
     reset();
-    setTimeout(() => router.push("/dashboard"), 3000);
+    setTimeout(() => router.push("/diva-app/dashboard"), 3000);
   }
 
   if (submitted) {

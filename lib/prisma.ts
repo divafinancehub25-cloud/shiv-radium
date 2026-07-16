@@ -6,6 +6,10 @@ import ws from "ws";
 // WebSocket mode — required so Prisma transactions work (HTTP mode does not
 // support them, which caused deposits/withdrawals/register to hang).
 neonConfig.webSocketConstructor = ws;
+// Route plain (non-transactional) queries over fast HTTP fetch; only real
+// transactions open a WebSocket. Avoids "Control plane request failed" and
+// connection churn on query-heavy pages like analytics.
+neonConfig.poolQueryViaFetch = true;
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;

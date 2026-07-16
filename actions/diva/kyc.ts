@@ -2,6 +2,7 @@
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { revalidatePath } from "next/cache";
 import { kycStep1Schema } from "@/lib/diva/validators/kyc";
 import { sendKYCStatusEmail } from "@/lib/diva/email";
 import { createNotification } from "@/actions/diva/notifications";
@@ -112,6 +113,21 @@ export async function adminRejectKYC(kycId: string, adminId: string, notes: stri
   await createNotification({ userId: kyc.userId, title: "KYC Rejected", message: notes ? `Your KYC was rejected: ${notes}` : "Your KYC was rejected. Please resubmit with correct documents.", type: "warning", link: "/diva-app/kyc" });
 
   return { success: true };
+}
+
+// Client-friendly wrappers — resolve admin id from the session and revalidate.
+export async function reviewApproveKYC(kycId: string) {
+  const adminId = await getAuthUserId();
+  const res = await adminApproveKYC(kycId, adminId);
+  revalidatePath("/diva-app-admin/kyc");
+  return res;
+}
+
+export async function reviewRejectKYC(kycId: string, notes: string) {
+  const adminId = await getAuthUserId();
+  const res = await adminRejectKYC(kycId, adminId, notes);
+  revalidatePath("/diva-app-admin/kyc");
+  return res;
 }
 
 export async function getMyKYC() {
