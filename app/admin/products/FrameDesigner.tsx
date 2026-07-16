@@ -31,8 +31,10 @@ export type FrameElement = {
   fill?: string;
   // image box: admin's default image (customer can replace it)
   defaultImage?: string;
-  // zoom of the image inside the box (cursor-resizable)
+  // zoom + pan of the image inside the box (cursor-adjustable)
   imgScale?: number;
+  imgX?: number; // % offset inside the box
+  imgY?: number;
 };
 
 // url = Google Fonts stylesheet; dataUrl = uploaded font file (.ttf/.otf/.woff)
@@ -155,7 +157,35 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
   }
 
   const canvasRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{ id: string; mode: "move" | "resize" | "imgscale"; startX: number; startY: number; orig: FrameElement } | null>(null);
+  const dragRef = useRef<{ id: string; mode: "move" | "resize" | "imgscale" | "imgpan"; startX: number; startY: number; orig: FrameElement } | null>(null);
+  const [globalFonts, setGlobalFonts] = useState<CustomFont[]>([]);
+
+  // Global font library — shared across all templates/products
+  useEffect(() => {
+    fetch("/api/admin/fonts").then((r) => r.json()).then((d) => {
+      if (d.fonts) setGlobalFonts(d.fonts);
+    }).catch(() => {});
+  }, []);
+
+  async function addFontToLibrary(font: CustomFont) {
+    setGlobalFonts((p) => p.some((f) => f.family === font.family) ? p : [...p, font]);
+    setOptions((o) => ({ ...o, fonts: { ...o.fonts, allowed: o.fonts.allowed.includes(font.family) ? o.fonts.allowed : [...o.fonts.allowed, font.family] } }));
+    await fetch("/api/admin/fonts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ font }) });
+  }
+
+  async function deleteFontFromLibrary(family: string) {
+    if (!confirm("Ye font sabhi templates ki list se hat jayega. Delete karein?")) return;
+    setGlobalFonts((p) => p.filter((f) => f.family !== family));
+    setOptions((o) => ({
+      ...o,
+      fonts: { allowed: o.fonts.allowed.filter((x) => x !== family), default: o.fonts.default === family ? "Arial, sans-serif" : o.fonts.default },
+      customFonts: o.customFonts.filter((f) => f.family !== family),
+    }));
+    await fetch("/api/admin/fonts", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ family }) });
+  }
+
+  // Union of library + fonts embedded in the open template
+  const allCustomFonts = [...globalFonts, ...options.customFonts.filter((f) => !globalFonts.some((g) => g.family === f.family))];
 
   const selected = elements.find((e) => e.id === selectedId) ?? null;
 
@@ -250,7 +280,7 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
     setOptions((o) => ({ ...o, bgAspect: aspect }));
   }
 
-  function startDrag(id: string, mode: "move" | "resize" | "imgscale", e: React.PointerEvent) {
+  function startDrag(id: string, mode: "move" | "resize" | "imgscale" | "imgpan", e: React.PointerEvent) {
     e.stopPropagation();
     e.preventDefault();
     const el = elements.find((x) => x.id === id);
@@ -274,6 +304,13 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
       if (d.mode === "imgscale") {
         return { ...el, imgScale: Math.max(0.3, Math.min(4, (d.orig.imgScale ?? 1) + dx / 30)) };
       }
+      if (d.mode === "imgpan") {
+        return {
+          ...el,
+          imgX: Math.max(-100, Math.min(100, (d.orig.imgX ?? 0) + (dx / el.w) * 100)),
+          imgY: Math.max(-100, Math.min(100, (d.orig.imgY ?? 0) + (dy / el.h) * 100)),
+        };
+      }
       return { ...el, w: Math.max(4, Math.min(140, d.orig.w + dx)), h: Math.max(3, Math.min(140, d.orig.h + dy)) };
     }));
   }
@@ -288,7 +325,10 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
     setSaving(true);
     setMsg("");
     try {
-      const body = { productId, name: templateName.trim(), elements, bgImage, options };
+      // Embed the allowed custom fonts (from global library) into this template
+      // so the customer page is self-contained
+      const embeddedFonts = allCustomFonts.filter((f) => options.fonts.allowed.includes(f.family));
+      const body = { productId, name: templateName.trim(), elements, bgImage, options: { ...options, customFonts: embeddedFonts } };
       const res = activeId
         ? await fetch(`/api/admin/frame-templates/${activeId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
         : await fetch("/api/admin/frame-templates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -340,13 +380,20 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
           el.defaultImage ? (
             <div style={{ borderRadius }} className="w-full h-full overflow-hidden relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={el.defaultImage} alt={el.label} draggable={false} style={{ transform: `scale(${el.imgScale ?? 1})` }} className="w-full h-full object-cover" />
+              <img src={el.defaultImage} alt={el.label} draggable={false} style={{ transform: `translate(${el.imgX ?? 0}%, ${el.imgY ?? 0}%) scale(${el.imgScale ?? 1})` }} className="w-full h-full object-cover" />
               {isSel && (
-                <div
-                  onPointerDown={(e) => startDrag(el.id, "imgscale", e)}
-                  title="Image zoom — drag karo"
-                  className="absolute bottom-1 right-1 w-4 h-4 bg-blue-500 border-2 border-white rounded-full cursor-ew-resize shadow"
-                />
+                <>
+                  <div
+                    onPointerDown={(e) => startDrag(el.id, "imgscale", e)}
+                    title="Image zoom — drag karo"
+                    className="absolute bottom-1 right-1 w-4 h-4 bg-blue-500 border-2 border-white rounded-full cursor-ew-resize shadow"
+                  />
+                  <div
+                    onPointerDown={(e) => startDrag(el.id, "imgpan", e)}
+                    title="Image adjust — up/down/left/right drag karo"
+                    className="absolute bottom-1 left-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full cursor-move shadow"
+                  />
+                </>
               )}
             </div>
           ) : (
@@ -386,12 +433,12 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
         href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Amatic+SC:wght@400;700&family=Dancing+Script&family=Poppins:wght@400;600&display=swap"
         rel="stylesheet"
       />
-      {options.customFonts.filter((f) => f.url).map((f) => (
+      {allCustomFonts.filter((f) => f.url).map((f) => (
         // eslint-disable-next-line @next/next/no-page-custom-font
         <link key={f.url} href={f.url} rel="stylesheet" />
       ))}
-      {options.customFonts.some((f) => f.dataUrl) && (
-        <style>{options.customFonts.filter((f) => f.dataUrl).map((f) =>
+      {allCustomFonts.some((f) => f.dataUrl) && (
+        <style>{allCustomFonts.filter((f) => f.dataUrl).map((f) =>
           `@font-face{font-family:${f.family.split(",")[0]};src:url(${f.dataUrl});font-display:swap;}`
         ).join("\n")}</style>
       )}
@@ -422,7 +469,7 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
         {templates.length === 0 && <span className="text-xs text-gray-400">Abhi koi template nahi — elements add karke Save karo</span>}
       </div>
 
-      <div className="grid lg:grid-cols-[180px_1fr_240px] gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-[180px_1fr] lg:grid-cols-[180px_1fr_240px] gap-4">
         {/* ── Left: Insert palette ── */}
         <div className="space-y-4">
           <div>
@@ -432,23 +479,31 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
 
           <div className="border border-gray-200 rounded-xl overflow-hidden">
             <div className="bg-orange-100 text-orange-700 text-xs font-bold px-3 py-2">Create frame</div>
-            <div className="p-3">
-              <p className="text-[10px] font-semibold text-gray-500 mb-1.5">Insert frame</p>
-              <div className="flex gap-2 mb-3">
-                <button onClick={() => addFrame("rect")} title="Rectangle frame" className="w-9 h-7 border-2 border-gray-800 rounded-sm hover:bg-orange-50" />
-                <button onClick={() => addFrame("ellipse")} title="Ellipse frame" className="w-9 h-7 border-2 border-gray-800 rounded-full hover:bg-orange-50" />
-                <button onClick={() => addFrame("rounded")} title="Rounded frame" className="w-9 h-7 border-2 border-gray-800 rounded-lg hover:bg-orange-50" />
-              </div>
-              <p className="text-[10px] font-semibold text-gray-500 mb-1.5">Insert img box</p>
-              <div className="flex gap-2 mb-3">
-                <button onClick={() => addImageBox("rect")} title="Rectangle image box" className="w-9 h-9 border-2 border-gray-800 rounded-sm hover:bg-orange-50 flex items-center justify-center"><Square className="w-3.5 h-3.5" /></button>
-                <button onClick={() => addImageBox("ellipse")} title="Circle image box" className="w-9 h-9 border-2 border-gray-800 rounded-full hover:bg-orange-50 flex items-center justify-center"><Circle className="w-3.5 h-3.5" /></button>
-                <button onClick={() => addImageBox("rounded")} title="Rounded image box" className="w-9 h-9 border-2 border-blue-500 rounded-xl hover:bg-orange-50 flex items-center justify-center text-blue-500"><Square className="w-3.5 h-3.5" /></button>
-              </div>
-              <p className="text-[10px] font-semibold text-gray-500 mb-1.5">Insert text box</p>
-              <button onClick={addTextBox} className="w-full flex items-center justify-center gap-1.5 border-2 border-gray-800 rounded-lg py-2 text-xs font-semibold hover:bg-orange-50">
-                <Type className="w-3.5 h-3.5" /> Text box
-              </button>
+            <div className="p-2 space-y-1.5">
+              <details className="border border-gray-200 rounded-lg" open>
+                <summary className="cursor-pointer px-2.5 py-1.5 text-[10px] font-semibold text-gray-600 select-none">▸ Insert frame</summary>
+                <div className="flex gap-2 p-2.5 pt-1">
+                  <button onClick={() => addFrame("rect")} title="Rectangle frame" className="w-9 h-7 border-2 border-gray-800 rounded-sm hover:bg-orange-50" />
+                  <button onClick={() => addFrame("ellipse")} title="Ellipse frame" className="w-9 h-7 border-2 border-gray-800 rounded-full hover:bg-orange-50" />
+                  <button onClick={() => addFrame("rounded")} title="Rounded frame" className="w-9 h-7 border-2 border-gray-800 rounded-lg hover:bg-orange-50" />
+                </div>
+              </details>
+              <details className="border border-gray-200 rounded-lg" open>
+                <summary className="cursor-pointer px-2.5 py-1.5 text-[10px] font-semibold text-gray-600 select-none">▸ Insert img box</summary>
+                <div className="flex gap-2 p-2.5 pt-1">
+                  <button onClick={() => addImageBox("rect")} title="Rectangle image box" className="w-9 h-9 border-2 border-gray-800 rounded-sm hover:bg-orange-50 flex items-center justify-center"><Square className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => addImageBox("ellipse")} title="Circle image box" className="w-9 h-9 border-2 border-gray-800 rounded-full hover:bg-orange-50 flex items-center justify-center"><Circle className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => addImageBox("rounded")} title="Rounded image box" className="w-9 h-9 border-2 border-blue-500 rounded-xl hover:bg-orange-50 flex items-center justify-center text-blue-500"><Square className="w-3.5 h-3.5" /></button>
+                </div>
+              </details>
+              <details className="border border-gray-200 rounded-lg" open>
+                <summary className="cursor-pointer px-2.5 py-1.5 text-[10px] font-semibold text-gray-600 select-none">▸ Insert text box</summary>
+                <div className="p-2.5 pt-1">
+                  <button onClick={addTextBox} className="w-full flex items-center justify-center gap-1.5 border-2 border-gray-800 rounded-lg py-2 text-xs font-semibold hover:bg-orange-50">
+                    <Type className="w-3.5 h-3.5" /> Text box
+                  </button>
+                </div>
+              </details>
             </div>
           </div>
 
@@ -603,7 +658,7 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
                   <div>
                     <label className="block text-gray-500 mb-0.5">Font Family</label>
                     <select className={inputClass + " bg-white"} value={selected.fontFamily} onChange={(e) => updateSelected({ fontFamily: e.target.value })}>
-                      {[...FONTS, ...options.customFonts.map((f) => ({ value: f.family, label: f.label + " (custom)" }))].map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                      {[...FONTS, ...allCustomFonts.map((f) => ({ value: f.family, label: f.label + " (custom)" }))].map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
                     </select>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -749,8 +804,12 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
           {/* Font Style */}
           <div className="border border-gray-200 rounded-xl p-4">
             <p className="text-xs font-bold text-gray-800 mb-2">Font Style (allowed)</p>
-            <div className="space-y-1 mb-3">
-              {[...FONTS, ...options.customFonts.map((f) => ({ value: f.family, label: f.label }))].map((f) => {
+            <details className="mb-3 border border-gray-200 rounded-lg">
+              <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-gray-600 select-none">
+                📂 Font list kholo ({options.fonts.allowed.length} allowed)
+              </summary>
+            <div className="space-y-1 p-3 pt-1 max-h-56 overflow-y-auto">
+              {[...FONTS.map((f) => ({ ...f, custom: false })), ...allCustomFonts.map((f) => ({ value: f.family, label: f.label, custom: true }))].map((f) => {
                 const checked = options.fonts.allowed.includes(f.value);
                 return (
                   <label key={f.value} className="flex items-center gap-2 cursor-pointer text-sm">
@@ -771,10 +830,20 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
                     {checked && options.fonts.default !== f.value && (
                       <button onClick={(e) => { e.preventDefault(); setOptions((o) => ({ ...o, fonts: { ...o.fonts, default: f.value } })); }} className="text-[9px] text-gray-400 hover:text-orange-500 underline">set default</button>
                     )}
+                    {f.custom && (
+                      <button
+                        onClick={(e) => { e.preventDefault(); deleteFontFromLibrary(f.value); }}
+                        title="Font library se delete karo"
+                        className="ml-auto text-gray-300 hover:text-red-500"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
                   </label>
                 );
               })}
             </div>
+            </details>
             {/* Add external Google Font */}
             <label className="block text-[10px] text-gray-500 mb-1">Naya font add karo (Google Fonts se — sirf naam likho)</label>
             <div className="flex gap-2">
@@ -790,11 +859,7 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
                   if (!name) return;
                   const family = `'${name}', sans-serif`;
                   const url = `https://fonts.googleapis.com/css2?family=${name.replace(/ /g, "+")}:wght@400;700&display=swap`;
-                  setOptions((o) => ({
-                    ...o,
-                    customFonts: o.customFonts.some((f) => f.family === family) ? o.customFonts : [...o.customFonts, { label: name, family, url }],
-                    fonts: { ...o.fonts, allowed: [...o.fonts.allowed, family] },
-                  }));
+                  addFontToLibrary({ label: name, family, url });
                   setNewFontName("");
                 }}
                 className="text-xs font-semibold bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-gray-700"
@@ -817,11 +882,7 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
                     const name = file.name.replace(/\.(ttf|otf|woff2?)$/i, "").replace(/[-_]/g, " ").trim();
                     reader.onload = () => {
                       const family = `'${name}', sans-serif`;
-                      setOptions((o) => o.customFonts.some((f) => f.family === family) ? o : ({
-                        ...o,
-                        customFonts: [...o.customFonts, { label: name, family, dataUrl: reader.result as string }],
-                        fonts: { ...o.fonts, allowed: [...o.fonts.allowed, family] },
-                      }));
+                      addFontToLibrary({ label: name, family, dataUrl: reader.result as string });
                     };
                     reader.readAsDataURL(file);
                   }

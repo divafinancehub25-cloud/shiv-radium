@@ -17,6 +17,8 @@ type FrameElement = {
   shape?: "rect" | "ellipse" | "rounded"; fill?: string;
   defaultImage?: string;
   imgScale?: number;
+  imgX?: number;
+  imgY?: number;
 };
 
 type CustomerOptions = {
@@ -54,7 +56,7 @@ const FONT_LABELS: Record<string, string> = {
   "'Poppins', sans-serif": "Poppins",
 };
 
-type Overrides = Record<string, { image?: string; text?: string; scale?: number }>;
+type Overrides = Record<string, { image?: string; text?: string; scale?: number; offX?: number; offY?: number }>;
 
 export default function FrameCustomizer({ product, templates }: { product: Product; templates: Template[] }) {
   const router = useRouter();
@@ -68,14 +70,22 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
   const [textSize, setTextSize] = useState<number | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [uploading, setUploading] = useState<string | null>(null);
+  const [fontOpen, setFontOpen] = useState(false);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const canvasRef = useRef<HTMLDivElement>(null);
-  const scaleDragRef = useRef<{ elId: string; startX: number; orig: number } | null>(null);
+  const scaleDragRef = useRef<{ elId: string; mode: "scale" | "pan"; startX: number; startY: number; origScale: number; origX: number; origY: number; elW: number; elH: number } | null>(null);
 
-  function startScaleDrag(elId: string, currentScale: number, e: React.PointerEvent) {
+  function startImgDrag(el: FrameElement, mode: "scale" | "pan", e: React.PointerEvent) {
     e.stopPropagation();
     e.preventDefault();
-    scaleDragRef.current = { elId, startX: e.clientX, orig: currentScale };
+    const o = overrides[el.id];
+    scaleDragRef.current = {
+      elId: el.id, mode, startX: e.clientX, startY: e.clientY,
+      origScale: o?.scale ?? el.imgScale ?? 1,
+      origX: o?.offX ?? el.imgX ?? 0,
+      origY: o?.offY ?? el.imgY ?? 0,
+      elW: el.w, elH: el.h,
+    };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }
 
@@ -84,7 +94,19 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
     if (!d || !canvasRef.current) return;
     const r = canvasRef.current.getBoundingClientRect();
     const dx = ((e.clientX - d.startX) / r.width) * 100;
-    setOverrides((p) => ({ ...p, [d.elId]: { ...p[d.elId], scale: Math.max(0.3, Math.min(4, d.orig + dx / 30)) } }));
+    const dy = ((e.clientY - d.startY) / r.height) * 100;
+    if (d.mode === "scale") {
+      setOverrides((p) => ({ ...p, [d.elId]: { ...p[d.elId], scale: Math.max(0.3, Math.min(4, d.origScale + dx / 30)) } }));
+    } else {
+      setOverrides((p) => ({
+        ...p,
+        [d.elId]: {
+          ...p[d.elId],
+          offX: Math.max(-100, Math.min(100, d.origX + (dx / d.elW) * 100)),
+          offY: Math.max(-100, Math.min(100, d.origY + (dy / d.elH) * 100)),
+        },
+      }));
+    }
   }
 
   function endScaleDrag() {
@@ -130,6 +152,9 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
       if (img) customizationData[el.label] = img;
       const scale = !useDefault ? overrides[el.id]?.scale : undefined;
       if (scale && scale !== 1) customizationData[`${el.label} Zoom`] = `${Math.round(scale * 100)}%`;
+      const ox = !useDefault ? overrides[el.id]?.offX : undefined;
+      const oy = !useDefault ? overrides[el.id]?.offY : undefined;
+      if ((ox && ox !== 0) || (oy && oy !== 0)) customizationData[`${el.label} Adjust`] = `${Math.round(ox ?? 0)}%, ${Math.round(oy ?? 0)}%`;
     }
     if (!useDefault) {
       if (frameColor) customizationData["Frame Color"] = frameColor;
@@ -169,6 +194,8 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
     if (el.type === "image") {
       const img = overrides[el.id]?.image ?? el.defaultImage;
       const scale = overrides[el.id]?.scale ?? el.imgScale ?? 1;
+      const offX = overrides[el.id]?.offX ?? el.imgX ?? 0;
+      const offY = overrides[el.id]?.offY ?? el.imgY ?? 0;
       return (
         <div
           key={el.id}
@@ -179,14 +206,22 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
           {img ? (
             <div style={{ borderRadius }} className="w-full h-full overflow-hidden relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={img} alt={el.label} draggable={false} style={{ transform: `scale(${scale})` }} className="w-full h-full object-cover" />
+              <img src={img} alt={el.label} draggable={false} style={{ transform: `translate(${offX}%, ${offY}%) scale(${scale})` }} className="w-full h-full object-cover" />
               {customizing && (
-                <div
-                  onPointerDown={(e) => startScaleDrag(el.id, scale, e)}
-                  onClick={(e) => e.stopPropagation()}
-                  title="Photo zoom — drag karo"
-                  className="absolute bottom-1 right-1 w-5 h-5 bg-blue-500 border-2 border-white rounded-full cursor-ew-resize shadow z-10"
-                />
+                <>
+                  <div
+                    onPointerDown={(e) => startImgDrag(el, "scale", e)}
+                    onClick={(e) => e.stopPropagation()}
+                    title="Photo zoom — drag karo"
+                    className="absolute bottom-1 right-1 w-5 h-5 bg-blue-500 border-2 border-white rounded-full cursor-ew-resize shadow z-10"
+                  />
+                  <div
+                    onPointerDown={(e) => startImgDrag(el, "pan", e)}
+                    onClick={(e) => e.stopPropagation()}
+                    title="Photo adjust — up/down/left/right drag karo"
+                    className="absolute bottom-1 left-1 w-5 h-5 bg-green-500 border-2 border-white rounded-full cursor-move shadow z-10"
+                  />
+                </>
               )}
             </div>
           ) : (
@@ -365,7 +400,13 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
               </div>
             ))}
 
-            {/* Image uploads */}
+            {/* Image uploads — dropdown/accordion */}
+            {imageBoxes.length > 0 && (
+            <details className="border border-gray-200 rounded-xl" open>
+              <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-700 select-none">
+                📸 Photos ({imageBoxes.length}) — kholne ke liye click karo
+              </summary>
+              <div className="p-4 pt-1 space-y-4">
             {imageBoxes.map((el) => (
               <div key={el.id}>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">{el.label}</label>
@@ -385,6 +426,9 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                 </button>
               </div>
             ))}
+              </div>
+            </details>
+            )}
 
             {/* Frame Color */}
             {opts && opts.frameColors.allowed.length > 0 && elements.some((e) => e.type === "frame") && (
@@ -420,24 +464,37 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
               </div>
             )}
 
-            {/* Font Style */}
+            {/* Font Style — dropdown */}
             {opts && opts.fonts.allowed.length > 0 && textBoxes.length > 0 && (
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Font Style</label>
-                <div className="space-y-1.5">
-                  {opts.fonts.allowed.map((f) => {
-                    const label = FONT_LABELS[f] ?? opts.customFonts.find((cf) => cf.family === f)?.label ?? f;
-                    return (
-                      <button
-                        key={f}
-                        onClick={() => setFont(f)}
-                        style={{ fontFamily: f }}
-                        className={`w-full text-left px-4 py-2.5 rounded-xl border-2 text-lg transition-colors ${(font ?? "") === f ? "border-orange-500 bg-orange-50" : "border-gray-200 hover:border-orange-300"}`}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
+                <div className="relative">
+                  <button
+                    onClick={() => setFontOpen((o) => !o)}
+                    className="w-full flex items-center justify-between border-2 border-gray-200 rounded-xl px-4 py-3 text-left hover:border-orange-300 transition-colors"
+                  >
+                    <span style={{ fontFamily: font ?? opts.fonts.default }} className="text-lg">
+                      {FONT_LABELS[font ?? opts.fonts.default] ?? opts.customFonts.find((cf) => cf.family === (font ?? opts.fonts.default))?.label ?? "Font choose karo"}
+                    </span>
+                    <span className="text-gray-400 text-xs">{fontOpen ? "▲" : "▼"}</span>
+                  </button>
+                  {fontOpen && (
+                    <div className="absolute z-30 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden max-h-60 overflow-y-auto">
+                      {opts.fonts.allowed.map((f) => {
+                        const label = FONT_LABELS[f] ?? opts.customFonts.find((cf) => cf.family === f)?.label ?? f;
+                        return (
+                          <button
+                            key={f}
+                            onClick={() => { setFont(f); setFontOpen(false); }}
+                            style={{ fontFamily: f }}
+                            className={`w-full text-left px-4 py-2.5 text-lg hover:bg-orange-50 transition-colors ${(font ?? "") === f ? "bg-orange-50" : ""}`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
