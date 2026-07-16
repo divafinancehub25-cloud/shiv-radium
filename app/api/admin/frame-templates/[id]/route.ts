@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { name, elements, bgImage, isActive } = await req.json();
+    const { name, elements, bgImage, isActive, options } = await req.json();
     const template = await db.frameTemplate.update({
       where: { id },
       data: {
@@ -15,6 +15,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         ...(elements !== undefined ? { elements } : {}),
         ...(bgImage !== undefined ? { bgImage } : {}),
         ...(isActive !== undefined ? { isActive } : {}),
+        ...(options !== undefined ? { options } : {}),
       },
     });
     return NextResponse.json({ template });

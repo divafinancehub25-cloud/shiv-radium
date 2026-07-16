@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 // Create a template
 export async function POST(req: NextRequest) {
   try {
-    const { productId, name, elements, bgImage } = await req.json();
+    const { productId, name, elements, bgImage, options } = await req.json();
     if (!productId || !name) return NextResponse.json({ error: "productId & name required" }, { status: 400 });
     const template = await db.frameTemplate.create({
       data: {
@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
         name,
         elements: elements ?? [],
         bgImage: bgImage ?? null,
+        options: options ?? undefined,
       },
     });
     return NextResponse.json({ template });

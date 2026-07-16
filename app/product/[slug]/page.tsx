@@ -3,6 +3,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { ArrowLeft } from "lucide-react";
 import CustomizerTool from "@/components/CustomizerTool";
+import FrameCustomizer from "@/components/FrameCustomizer";
 
 export const dynamic = "force-dynamic";
 
@@ -24,10 +25,22 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         orderBy: { sortOrder: "asc" },
         include: { options: { orderBy: { sortOrder: "asc" } } },
       },
+      frameTemplates: {
+        where: { isActive: true },
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
 
   if (!product) notFound();
+
+  const frameTemplates = product.frameTemplates.map((t) => ({
+    id: t.id,
+    name: t.name,
+    elements: (t.elements as unknown as never[]) ?? [],
+    bgImage: t.bgImage,
+    options: (t.options as unknown as never) ?? null,
+  }));
 
   const serializedProduct = {
     ...product,
@@ -57,7 +70,23 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         </div>
       </header>
 
-      <CustomizerTool product={serializedProduct} />
+      {frameTemplates.length > 0 ? (
+        <div className="pt-6">
+          <FrameCustomizer
+            product={{
+              id: product.id,
+              name: product.name,
+              slug: product.slug,
+              basePrice: Number(product.basePrice),
+              deliveryDays: product.deliveryDays,
+              images: product.images,
+            }}
+            templates={frameTemplates}
+          />
+        </div>
+      ) : (
+        <CustomizerTool product={serializedProduct} />
+      )}
     </div>
   );
 }

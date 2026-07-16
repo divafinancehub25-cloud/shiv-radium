@@ -114,6 +114,9 @@ model FrameTemplate {
   name      String
   elements  Json     @default("[]")
   bgImage   String?
+  // Customer-facing options: allowed frame colors, text colors, fonts (incl.
+  // admin-added Google fonts), fixed text sizes + defaults for each
+  options   Json?
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -29,13 +29,43 @@ export type FrameElement = {
   // frame/shape
   shape?: Shape;
   fill?: string;
+  // image box: admin's default image (customer can replace it)
+  defaultImage?: string;
 };
+
+export type CustomFont = { label: string; family: string; url: string };
+
+export type CustomerOptions = {
+  frameColors: { allowed: string[]; default: string };
+  textColors: { allowed: string[]; default: string };
+  fonts: { allowed: string[]; default: string };
+  textSizes: { allowed: { label: string; px: number }[]; default: number };
+  customFonts: CustomFont[];
+};
+
+export const TEXT_SIZE_PRESETS = [
+  { label: "Small", px: 18 },
+  { label: "Medium", px: 24 },
+  { label: "Large", px: 32 },
+  { label: "XL", px: 40 },
+];
+
+function defaultOptions(): CustomerOptions {
+  return {
+    frameColors: { allowed: ["#9b1b30", "#2a5fc1", "#d4a437", "#1c1c1c"], default: "#9b1b30" },
+    textColors: { allowed: ["#1c1c1c", "#ffffff", "#d4a437"], default: "#1c1c1c" },
+    fonts: { allowed: ["Arial, sans-serif", "'Playfair Display', serif", "'Dancing Script', cursive"], default: "Arial, sans-serif" },
+    textSizes: { allowed: TEXT_SIZE_PRESETS.slice(0, 3), default: 24 },
+    customFonts: [],
+  };
+}
 
 type Template = {
   id: string;
   name: string;
   elements: FrameElement[];
   bgImage: string | null;
+  options?: CustomerOptions | null;
 };
 
 const FONTS = [
@@ -66,6 +96,18 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
   const [zoom, setZoom] = useState(1);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
+  const [options, setOptions] = useState<CustomerOptions>(defaultOptions());
+  const [uploadingBg, setUploadingBg] = useState(false);
+  const [uploadingImg, setUploadingImg] = useState(false);
+  const [newFontName, setNewFontName] = useState("");
+
+  async function uploadFile(file: File): Promise<string | null> {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
+    const data = await res.json();
+    return res.ok && data.url ? data.url : null;
+  }
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ id: string; mode: "move" | "resize"; startX: number; startY: number; orig: FrameElement } | null>(null);
@@ -86,6 +128,7 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
     setTemplateName(t.name);
     setElements(t.elements);
     setBgImage(t.bgImage ?? productImage);
+    setOptions({ ...defaultOptions(), ...(t.options ?? {}) });
     setSelectedId(null);
   }
 
@@ -94,6 +137,7 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
     setTemplateName(`Template ${templates.length + 1}`);
     setElements([]);
     setBgImage(productImage);
+    setOptions(defaultOptions());
     setSelectedId(null);
   }
 
@@ -190,7 +234,7 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
     setSaving(true);
     setMsg("");
     try {
-      const body = { productId, name: templateName.trim(), elements, bgImage };
+      const body = { productId, name: templateName.trim(), elements, bgImage, options };
       const res = activeId
         ? await fetch(`/api/admin/frame-templates/${activeId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
         : await fetch("/api/admin/frame-templates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -239,10 +283,15 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
         className={`cursor-move select-none group ${isSel ? "ring-2 ring-orange-500" : "hover:ring-1 hover:ring-orange-300"}`}
       >
         {el.type === "image" && (
-          <div style={{ borderRadius }} className="w-full h-full bg-gray-200/90 border-2 border-dashed border-gray-400 flex flex-col items-center justify-center overflow-hidden">
-            <ImageIcon className="w-5 h-5 text-gray-500" />
-            <span className="text-[9px] text-gray-500 font-medium px-1 text-center leading-tight">{el.label}</span>
-          </div>
+          el.defaultImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={el.defaultImage} alt={el.label} draggable={false} style={{ borderRadius }} className="w-full h-full object-cover" />
+          ) : (
+            <div style={{ borderRadius }} className="w-full h-full bg-gray-200/90 border-2 border-dashed border-gray-400 flex flex-col items-center justify-center overflow-hidden">
+              <ImageIcon className="w-5 h-5 text-gray-500" />
+              <span className="text-[9px] text-gray-500 font-medium px-1 text-center leading-tight">{el.label}</span>
+            </div>
+          )
         )}
         {el.type === "text" && (
           <div
@@ -274,6 +323,10 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
         href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Amatic+SC:wght@400;700&family=Dancing+Script&family=Poppins:wght@400;600&display=swap"
         rel="stylesheet"
       />
+      {options.customFonts.map((f) => (
+        // eslint-disable-next-line @next/next/no-page-custom-font
+        <link key={f.url} href={f.url} rel="stylesheet" />
+      ))}
 
       <div className="flex items-center justify-between mb-1">
         <h2 className="font-semibold text-gray-900">🖼️ Frame Designer</h2>
@@ -338,11 +391,37 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
             <button onClick={() => setZoom((z) => Math.min(2, num(z + 0.15)))} className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50"><ZoomIn className="w-4 h-4" /></button>
           </div>
 
-          {/* Background toggle */}
-          <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-600">
-            <input type="checkbox" checked={!!bgImage} onChange={(e) => setBgImage(e.target.checked ? productImage : null)} className="w-3.5 h-3.5 accent-orange-500" />
-            Product image background
-          </label>
+          {/* Background image */}
+          <div className="border border-gray-200 rounded-xl p-3 space-y-2">
+            <p className="text-[10px] font-semibold text-gray-500">Background Image</p>
+            <p className="text-[9px] text-gray-400">Customer isko change nahi kar sakta</p>
+            <label className="flex items-center justify-center gap-1.5 border-2 border-dashed border-gray-300 rounded-lg py-2 text-xs font-semibold cursor-pointer hover:border-orange-400 hover:bg-orange-50 transition-colors">
+              {uploadingBg ? "Uploading..." : "⬆️ Upload Background"}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={uploadingBg}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setUploadingBg(true);
+                  const url = await uploadFile(file);
+                  if (url) setBgImage(url);
+                  setUploadingBg(false);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            <div className="flex gap-1.5">
+              <button onClick={() => setBgImage(productImage)} className="flex-1 text-[10px] border border-gray-200 rounded-lg py-1 hover:bg-gray-50">Product image</button>
+              <button onClick={() => setBgImage(null)} className="flex-1 text-[10px] border border-gray-200 rounded-lg py-1 hover:bg-gray-50">Blank</button>
+            </div>
+            {bgImage && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={bgImage} alt="bg" className="w-full h-14 object-cover rounded-lg border border-gray-100" />
+            )}
+          </div>
         </div>
 
         {/* ── Center: Canvas ── */}
@@ -406,6 +485,34 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
                 </div>
               </div>
 
+              {/* Image box props */}
+              {selected.type === "image" && (
+                <div>
+                  <label className="block text-gray-500 mb-0.5">Default Image (customer change kar sakta hai)</label>
+                  <label className="flex items-center justify-center gap-1.5 border-2 border-dashed border-gray-300 rounded-lg py-2 text-xs font-semibold cursor-pointer hover:border-orange-400 hover:bg-orange-50 transition-colors">
+                    {uploadingImg ? "Uploading..." : selected.defaultImage ? "🔄 Change Image" : "⬆️ Upload Image"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={uploadingImg}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setUploadingImg(true);
+                        const url = await uploadFile(file);
+                        if (url) updateSelected({ defaultImage: url });
+                        setUploadingImg(false);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  {selected.defaultImage && (
+                    <button onClick={() => updateSelected({ defaultImage: undefined })} className="mt-1.5 text-[10px] text-red-500 hover:underline">✕ Image hatao</button>
+                  )}
+                </div>
+              )}
+
               {/* Text props */}
               {selected.type === "text" && (
                 <>
@@ -416,7 +523,7 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
                   <div>
                     <label className="block text-gray-500 mb-0.5">Font Family</label>
                     <select className={inputClass + " bg-white"} value={selected.fontFamily} onChange={(e) => updateSelected({ fontFamily: e.target.value })}>
-                      {FONTS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                      {[...FONTS, ...options.customFonts.map((f) => ({ value: f.family, label: f.label + " (custom)" }))].map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
                     </select>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -482,6 +589,167 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
               </div>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* ── Customer Options — jo customer choose kar sakega ── */}
+      <div className="mt-6 border-t border-gray-100 pt-5">
+        <h3 className="font-semibold text-gray-900 mb-1">🎛️ Customer Options</h3>
+        <p className="text-xs text-gray-400 mb-4">
+          Customer sirf yahi options choose kar payega — design/layout locked rahega. Chips pe click karke allow/remove karo.
+        </p>
+        <div className="grid md:grid-cols-2 gap-4">
+
+          {/* Frame Color */}
+          <div className="border border-gray-200 rounded-xl p-4">
+            <p className="text-xs font-bold text-gray-800 mb-2">Frame Color (allowed)</p>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {options.frameColors.allowed.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setOptions((o) => ({ ...o, frameColors: { allowed: o.frameColors.allowed.filter((x) => x !== c), default: o.frameColors.default === c ? (o.frameColors.allowed.find((x) => x !== c) ?? "") : o.frameColors.default } }))}
+                  title="Click = remove"
+                  style={{ background: c }}
+                  className={`w-8 h-8 rounded-lg border-2 ${options.frameColors.default === c ? "border-orange-500 ring-2 ring-orange-200" : "border-gray-200"}`}
+                />
+              ))}
+              <input
+                type="color"
+                title="Naya color add karo"
+                onChange={(e) => {
+                  const c = e.target.value;
+                  setOptions((o) => o.frameColors.allowed.includes(c) ? o : { ...o, frameColors: { ...o.frameColors, allowed: [...o.frameColors.allowed, c] } });
+                }}
+                className="w-8 h-8 rounded-lg border-2 border-dashed border-gray-300 cursor-pointer p-0"
+              />
+            </div>
+            <label className="block text-[10px] text-gray-500 mb-0.5">Default color</label>
+            <div className="flex flex-wrap gap-1.5">
+              {options.frameColors.allowed.map((c) => (
+                <button key={c} onClick={() => setOptions((o) => ({ ...o, frameColors: { ...o.frameColors, default: c } }))} style={{ background: c }} className={`w-5 h-5 rounded border ${options.frameColors.default === c ? "border-orange-500 scale-110" : "border-gray-200"}`} />
+              ))}
+            </div>
+          </div>
+
+          {/* Text Color */}
+          <div className="border border-gray-200 rounded-xl p-4">
+            <p className="text-xs font-bold text-gray-800 mb-2">Text Color (allowed)</p>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {options.textColors.allowed.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setOptions((o) => ({ ...o, textColors: { allowed: o.textColors.allowed.filter((x) => x !== c), default: o.textColors.default === c ? (o.textColors.allowed.find((x) => x !== c) ?? "") : o.textColors.default } }))}
+                  title="Click = remove"
+                  style={{ background: c }}
+                  className={`w-8 h-8 rounded-lg border-2 ${options.textColors.default === c ? "border-orange-500 ring-2 ring-orange-200" : "border-gray-200"}`}
+                />
+              ))}
+              <input
+                type="color"
+                title="Naya color add karo"
+                onChange={(e) => {
+                  const c = e.target.value;
+                  setOptions((o) => o.textColors.allowed.includes(c) ? o : { ...o, textColors: { ...o.textColors, allowed: [...o.textColors.allowed, c] } });
+                }}
+                className="w-8 h-8 rounded-lg border-2 border-dashed border-gray-300 cursor-pointer p-0"
+              />
+            </div>
+            <label className="block text-[10px] text-gray-500 mb-0.5">Default color</label>
+            <div className="flex flex-wrap gap-1.5">
+              {options.textColors.allowed.map((c) => (
+                <button key={c} onClick={() => setOptions((o) => ({ ...o, textColors: { ...o.textColors, default: c } }))} style={{ background: c }} className={`w-5 h-5 rounded border ${options.textColors.default === c ? "border-orange-500 scale-110" : "border-gray-200"}`} />
+              ))}
+            </div>
+          </div>
+
+          {/* Font Style */}
+          <div className="border border-gray-200 rounded-xl p-4">
+            <p className="text-xs font-bold text-gray-800 mb-2">Font Style (allowed)</p>
+            <div className="space-y-1 mb-3">
+              {[...FONTS, ...options.customFonts.map((f) => ({ value: f.family, label: f.label }))].map((f) => {
+                const checked = options.fonts.allowed.includes(f.value);
+                return (
+                  <label key={f.value} className="flex items-center gap-2 cursor-pointer text-sm">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => setOptions((o) => ({
+                        ...o,
+                        fonts: {
+                          allowed: e.target.checked ? [...o.fonts.allowed, f.value] : o.fonts.allowed.filter((x) => x !== f.value),
+                          default: !e.target.checked && o.fonts.default === f.value ? (o.fonts.allowed.find((x) => x !== f.value) ?? "") : o.fonts.default,
+                        },
+                      }))}
+                      className="w-3.5 h-3.5 accent-orange-500"
+                    />
+                    <span style={{ fontFamily: f.value }} className={checked ? "text-gray-900" : "text-gray-400"}>{f.label}</span>
+                    {options.fonts.default === f.value && <span className="text-[9px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full font-bold">DEFAULT</span>}
+                    {checked && options.fonts.default !== f.value && (
+                      <button onClick={(e) => { e.preventDefault(); setOptions((o) => ({ ...o, fonts: { ...o.fonts, default: f.value } })); }} className="text-[9px] text-gray-400 hover:text-orange-500 underline">set default</button>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+            {/* Add external Google Font */}
+            <label className="block text-[10px] text-gray-500 mb-1">Naya font add karo (Google Fonts se — sirf naam likho)</label>
+            <div className="flex gap-2">
+              <input
+                className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-400"
+                placeholder="e.g. Lobster, Pacifico, Great Vibes"
+                value={newFontName}
+                onChange={(e) => setNewFontName(e.target.value)}
+              />
+              <button
+                onClick={() => {
+                  const name = newFontName.trim();
+                  if (!name) return;
+                  const family = `'${name}', sans-serif`;
+                  const url = `https://fonts.googleapis.com/css2?family=${name.replace(/ /g, "+")}:wght@400;700&display=swap`;
+                  setOptions((o) => ({
+                    ...o,
+                    customFonts: o.customFonts.some((f) => f.family === family) ? o.customFonts : [...o.customFonts, { label: name, family, url }],
+                    fonts: { ...o.fonts, allowed: [...o.fonts.allowed, family] },
+                  }));
+                  setNewFontName("");
+                }}
+                className="text-xs font-semibold bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-gray-700"
+              >
+                + Add Font
+              </button>
+            </div>
+          </div>
+
+          {/* Text Size */}
+          <div className="border border-gray-200 rounded-xl p-4">
+            <p className="text-xs font-bold text-gray-800 mb-2">Text Size (fixed choices)</p>
+            <div className="space-y-1">
+              {TEXT_SIZE_PRESETS.map((s) => {
+                const checked = options.textSizes.allowed.some((x) => x.px === s.px);
+                return (
+                  <label key={s.px} className="flex items-center gap-2 cursor-pointer text-sm">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => setOptions((o) => ({
+                        ...o,
+                        textSizes: {
+                          allowed: e.target.checked ? [...o.textSizes.allowed, s].sort((a, b) => a.px - b.px) : o.textSizes.allowed.filter((x) => x.px !== s.px),
+                          default: !e.target.checked && o.textSizes.default === s.px ? (o.textSizes.allowed.find((x) => x.px !== s.px)?.px ?? 24) : o.textSizes.default,
+                        },
+                      }))}
+                      className="w-3.5 h-3.5 accent-orange-500"
+                    />
+                    <span className={checked ? "text-gray-900" : "text-gray-400"}>{s.label} ({s.px}px)</span>
+                    {options.textSizes.default === s.px && <span className="text-[9px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full font-bold">DEFAULT</span>}
+                    {checked && options.textSizes.default !== s.px && (
+                      <button onClick={(e) => { e.preventDefault(); setOptions((o) => ({ ...o, textSizes: { ...o.textSizes, default: s.px } })); }} className="text-[9px] text-gray-400 hover:text-orange-500 underline">set default</button>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
     </div>
