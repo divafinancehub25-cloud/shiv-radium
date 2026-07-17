@@ -16,7 +16,11 @@ export default function FlashDeal({
 }) {
   const [secs, setSecs] = useState(2 * 24 * 3600 + 14 * 3600 + 32 * 60 + 47);
   const [videoOpen, setVideoOpen] = useState(false);
-  const isPlayable = !!story?.videoUrl && (story.videoUrl.startsWith("data:video") || /\.(mp4|webm)(\?|$)/i.test(story.videoUrl));
+  // YouTube link → inline embed id
+  const ytMatch = story?.videoUrl?.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{6,})/);
+  const ytId = ytMatch?.[1] ?? null;
+  const isFileVideo = !!story?.videoUrl && (story.videoUrl.startsWith("data:video") || /\.(mp4|webm)(\?|$)/i.test(story.videoUrl));
+  const isPlayable = isFileVideo || !!ytId;
 
   useEffect(() => {
     const t = setInterval(() => setSecs((s) => (s > 0 ? s - 1 : 0)), 1000);
@@ -103,7 +107,16 @@ export default function FlashDeal({
             <div className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4" onClick={() => setVideoOpen(false)}>
               <div className="relative w-full max-w-md" onClick={(e) => e.stopPropagation()}>
                 <button onClick={() => setVideoOpen(false)} className="absolute -top-9 right-0 text-white text-sm font-bold bg-white/20 rounded-full px-3 py-1">✕ Close</button>
-                <video src={story!.videoUrl} controls autoPlay playsInline className="w-full rounded-2xl shadow-2xl bg-black" />
+                {ytId ? (
+                  <iframe
+                    src={`https://www.youtube.com/embed/${ytId}?autoplay=1&playsinline=1`}
+                    allow="autoplay; encrypted-media; picture-in-picture"
+                    allowFullScreen
+                    className="w-full aspect-video rounded-2xl shadow-2xl bg-black"
+                  />
+                ) : (
+                  <video src={story!.videoUrl} controls autoPlay playsInline className="w-full rounded-2xl shadow-2xl bg-black" />
+                )}
               </div>
             </div>
           )}

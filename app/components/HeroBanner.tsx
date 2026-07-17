@@ -21,10 +21,14 @@ export default function HeroBanner({
   slides = DEFAULT_SLIDES,
   interval = 4,
   motion = "slide",
+  desktopHeight = 320,
+  mobileHeight = 180,
 }: {
   slides?: Slide[];
   interval?: number;
   motion?: string;
+  desktopHeight?: number;
+  mobileHeight?: number;
 }) {
   const [current, setCurrent] = useState(0);
   const list = slides.length > 0 ? slides : DEFAULT_SLIDES;
@@ -49,11 +53,13 @@ export default function HeroBanner({
         .hero-fade { animation: heroFade 0.7s ease both; }
         .hero-zoom { animation: heroZoom 0.5s ease both; }
         .hero-slideup { animation: heroSlideUp 0.5s ease both; }
+        .hero-banner-img { height: ${mobileHeight}px; }
+        @media (min-width: 768px) { .hero-banner-img { height: ${desktopHeight}px; } }
       `}</style>
       {slide.fullImage ? (
         <Link key={current} href={slide.link || "/products"} className={`block ${motionClass}`}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={slide.fullImage} alt={slide.title1 || "Slide"} className="w-full h-auto object-cover" />
+          <img src={slide.fullImage} alt={slide.title1 || "Slide"} className="hero-banner-img w-full object-cover" />
         </Link>
       ) : (
       <div key={current} className={`px-5 py-6 flex items-center gap-4 ${motionClass}`}>

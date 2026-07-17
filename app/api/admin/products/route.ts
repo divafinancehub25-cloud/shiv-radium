@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
         heightIn: body.heightIn ? parseFloat(body.heightIn) : null,
         noReturnPolicy: !!body.noReturnPolicy,
         attributes: body.attributes ?? undefined,
+        customizeEnabled: body.customizeEnabled !== false,
       },
     });
 

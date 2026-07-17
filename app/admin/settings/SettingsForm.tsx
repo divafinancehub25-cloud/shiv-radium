@@ -5,11 +5,23 @@ import { Upload, Save, Plus, Trash2 } from "lucide-react";
 
 type Slide = { badge: string; title1: string; title2: string; subtitle: string; emoji: string; bg: string; image?: string; fullImage?: string; link?: string };
 type HomepageConfig = {
-  slider: { enabled: boolean; interval: number; motion: string; slides: Slide[] };
+  slider: { enabled: boolean; interval: number; motion: string; slides: Slide[]; desktopHeight: number; mobileHeight: number };
   flashDeal: { enabled: boolean; label: string; title: string; highlight: string; subtitle: string; link: string; image?: string };
   story: { enabled: boolean; videoUrl: string; whatsapp: string; instagram: string; facebook: string };
+  sectionOrder: string[];
 };
-type ThemeConfig = { primary: string; searchPlaceholder: string; icons: { wishlist: boolean; cart: boolean; bell: boolean } };
+type ThemeConfig = { primary: string; searchPlaceholder: string; icons: { wishlist: boolean; cart: boolean; bell: boolean }; logoHeight: number; categoryStyle: { size: string; shape: string } };
+
+const SECTION_LABELS: Record<string, string> = {
+  slider: "🎠 Homepage Slider",
+  categories: "🗂️ Category Menu",
+  flashStory: "⚡ Flash Deal + Our Story",
+  featured: "⭐ Featured Products",
+  howItWorks: "🛠️ How It Works",
+  testimonials: "💬 Testimonials",
+  cta: "📣 CTA Banner",
+};
+const DEFAULT_SECTION_ORDER = ["slider", "categories", "flashStory", "featured", "howItWorks", "testimonials", "cta"];
 
 const BG_PRESETS = [
   { label: "🟠 Orange-Brown", value: "from-[#3a1a00] to-[#7a3500]" },
@@ -21,8 +33,9 @@ const BG_PRESETS = [
 ];
 
 const DEFAULT_HOMEPAGE: HomepageConfig = {
+  sectionOrder: DEFAULT_SECTION_ORDER,
   slider: {
-    enabled: true, interval: 4, motion: "slide",
+    enabled: true, interval: 4, motion: "slide", desktopHeight: 320, mobileHeight: 180,
     slides: [
       { badge: "NEW ARRIVAL", title1: "Personalized", title2: "LED PHOTO FRAME", subtitle: "Make Your Memories More Beautiful", emoji: "🖼️", bg: BG_PRESETS[0].value },
       { badge: "BESTSELLER", title1: "Custom Name", title2: "BOARDS & PLATES", subtitle: "Your Name, Your Style, Your Door", emoji: "🪧", bg: BG_PRESETS[1].value },
@@ -32,7 +45,7 @@ const DEFAULT_HOMEPAGE: HomepageConfig = {
   flashDeal: { enabled: true, label: "⚡ FLASH DEAL", title: "Flat", highlight: "40% OFF", subtitle: "On Customized Photo Frames", link: "/products" },
   story: { enabled: true, videoUrl: "", whatsapp: "", instagram: "", facebook: "" },
 };
-const DEFAULT_THEME: ThemeConfig = { primary: "#f97316", searchPlaceholder: "Search for products...", icons: { wishlist: true, cart: true, bell: true } };
+const DEFAULT_THEME: ThemeConfig = { primary: "#f97316", searchPlaceholder: "Search for products...", icons: { wishlist: true, cart: true, bell: true }, logoHeight: 40, categoryStyle: { size: "md", shape: "rounded" } };
 
 function parseJson<T>(raw: string | undefined, fallback: T): T {
   if (!raw) return fallback;
@@ -53,8 +66,20 @@ export default function SettingsForm({ settings, razorpaySet }: { settings: Reco
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [homepage, setHomepage] = useState<HomepageConfig>(parseJson(settings.homepage_config, DEFAULT_HOMEPAGE));
-  const [theme, setTheme] = useState<ThemeConfig>(parseJson(settings.theme_config, DEFAULT_THEME));
+  const [homepage, setHomepage] = useState<HomepageConfig>(() => {
+    const p = parseJson(settings.homepage_config, DEFAULT_HOMEPAGE);
+    return {
+      ...p,
+      slider: { ...DEFAULT_HOMEPAGE.slider, ...p.slider },
+      flashDeal: { ...DEFAULT_HOMEPAGE.flashDeal, ...p.flashDeal },
+      story: { ...DEFAULT_HOMEPAGE.story, ...p.story },
+      sectionOrder: Array.isArray(p.sectionOrder) && p.sectionOrder.length > 0 ? p.sectionOrder : DEFAULT_SECTION_ORDER,
+    };
+  });
+  const [theme, setTheme] = useState<ThemeConfig>(() => {
+    const p = parseJson(settings.theme_config, DEFAULT_THEME);
+    return { ...p, icons: { ...DEFAULT_THEME.icons, ...p.icons }, categoryStyle: { ...DEFAULT_THEME.categoryStyle, ...(p.categoryStyle ?? {}) }, logoHeight: p.logoHeight ?? 40 };
+  });
   const [uploadingSlide, setUploadingSlide] = useState<number | null>(null);
 
   async function uploadFile(file: File): Promise<string | null> {
@@ -218,85 +243,94 @@ export default function SettingsForm({ settings, razorpaySet }: { settings: Reco
                   <option value="slideUp">⬆️ Slide Up</option>
                 </select>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">💻 Laptop Banner Height (px)</label>
+                <input className={inputClass} type="number" min={100} max={800} value={homepage.slider.desktopHeight}
+                  onChange={(e) => setHomepage((h) => ({ ...h, slider: { ...h.slider, desktopHeight: Number(e.target.value) || 320 } }))} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">📱 Mobile Banner Height (px)</label>
+                <input className={inputClass} type="number" min={80} max={500} value={homepage.slider.mobileHeight}
+                  onChange={(e) => setHomepage((h) => ({ ...h, slider: { ...h.slider, mobileHeight: Number(e.target.value) || 180 } }))} />
+              </div>
             </div>
 
-            {/* Slides */}
+            {/* Banner slides — sirf full image + link */}
             <div className="space-y-3">
               {homepage.slider.slides.map((slide, i) => (
-                <details key={i} className="border border-gray-200 rounded-xl">
-                  <summary className="cursor-pointer px-4 py-2.5 text-sm font-semibold text-gray-700 select-none flex items-center justify-between">
-                    <span>Slide {i + 1}: {slide.title1} {slide.title2}</span>
+                <div key={i} className="border border-gray-200 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-semibold text-gray-700">Banner {i + 1}</p>
                     <button
-                      onClick={(e) => { e.preventDefault(); setHomepage((h) => ({ ...h, slider: { ...h.slider, slides: h.slider.slides.filter((_, si) => si !== i) } })); }}
+                      onClick={() => setHomepage((h) => ({ ...h, slider: { ...h.slider, slides: h.slider.slides.filter((_, si) => si !== i) } }))}
                       className="text-gray-300 hover:text-red-500"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
-                  </summary>
-                  <div className="p-4 pt-1 grid grid-cols-2 gap-3">
-                    <input className={inputClass} placeholder="Badge (NEW ARRIVAL)" value={slide.badge} onChange={(e) => setSlide(i, { badge: e.target.value })} />
-                    <input className={inputClass} placeholder="Emoji (🖼️)" value={slide.emoji} onChange={(e) => setSlide(i, { emoji: e.target.value })} />
-                    <input className={inputClass} placeholder="Title line 1" value={slide.title1} onChange={(e) => setSlide(i, { title1: e.target.value })} />
-                    <input className={inputClass} placeholder="Title line 2 (orange)" value={slide.title2} onChange={(e) => setSlide(i, { title2: e.target.value })} />
-                    <input className={inputClass + " col-span-2"} placeholder="Subtitle" value={slide.subtitle} onChange={(e) => setSlide(i, { subtitle: e.target.value })} />
-                    <select className={inputClass + " bg-white"} value={slide.bg} onChange={(e) => setSlide(i, { bg: e.target.value })}>
-                      {BG_PRESETS.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
-                    </select>
-                    <label className="flex items-center justify-center gap-1.5 border-2 border-dashed border-gray-200 rounded-xl py-2 text-xs font-semibold cursor-pointer hover:border-orange-400 transition-colors">
-                      {uploadingSlide === i ? "Uploading..." : slide.image ? "🔄 Change photo" : "⬆️ Slide photo (optional)"}
+                  </div>
+                  {slide.fullImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={slide.fullImage} alt="" className="w-full h-20 object-cover rounded-lg border border-gray-100 mb-2" />
+                  ) : (
+                    <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-2">⚠️ Banner image upload karo — bina image ke slide nahi dikhega</p>
+                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="flex items-center justify-center gap-1.5 border-2 border-dashed border-orange-200 rounded-xl py-2 text-xs font-semibold cursor-pointer hover:border-orange-400 transition-colors">
+                      {uploadingSlide === i ? "Uploading..." : slide.fullImage ? "🔄 Change banner" : "⬆️ Upload banner image"}
                       <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
                         setUploadingSlide(i);
                         const url = await uploadFile(file);
-                        if (url) setSlide(i, { image: url });
+                        if (url) setSlide(i, { fullImage: url });
                         setUploadingSlide(null);
                         e.target.value = "";
                       }} />
                     </label>
-                    {slide.image && (
-                      <button onClick={() => setSlide(i, { image: undefined })} className="col-span-2 text-xs text-red-400 hover:text-red-600 text-left">✕ Photo hatao (emoji dikhega)</button>
-                    )}
-
-                    {/* Full slider image — poora slider isi image se replace */}
-                    <div className="col-span-2 border-t border-gray-100 pt-3 mt-1">
-                      <p className="text-xs font-semibold text-gray-600 mb-1.5">🖼️ Poora Slider Image (banner)</p>
-                      <p className="text-[10px] text-gray-400 mb-2">Ye upload karne par text/emoji ki jagah poora slider isi image se ban jayega</p>
-                      <div className="grid grid-cols-2 gap-3">
-                        <label className="flex items-center justify-center gap-1.5 border-2 border-dashed border-orange-200 rounded-xl py-2 text-xs font-semibold cursor-pointer hover:border-orange-400 transition-colors">
-                          {uploadingSlide === i + 1000 ? "Uploading..." : slide.fullImage ? "🔄 Change banner" : "⬆️ Upload full banner"}
-                          <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            setUploadingSlide(i + 1000);
-                            const url = await uploadFile(file);
-                            if (url) setSlide(i, { fullImage: url });
-                            setUploadingSlide(null);
-                            e.target.value = "";
-                          }} />
-                        </label>
-                        <input className={inputClass} placeholder="Click link (/products)" value={slide.link ?? ""} onChange={(e) => setSlide(i, { link: e.target.value })} />
-                      </div>
-                      {slide.fullImage && (
-                        <div className="mt-2">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={slide.fullImage} alt="" className="w-full h-16 object-cover rounded-lg border border-gray-100" />
-                          <button onClick={() => setSlide(i, { fullImage: undefined })} className="text-xs text-red-400 hover:text-red-600 mt-1">✕ Banner hatao (text slider wapas)</button>
-                        </div>
-                      )}
-                    </div>
+                    <input className={inputClass} placeholder="Click link (/products)" value={slide.link ?? ""} onChange={(e) => setSlide(i, { link: e.target.value })} />
                   </div>
-                </details>
+                </div>
               ))}
               <button
-                onClick={() => setHomepage((h) => ({ ...h, slider: { ...h.slider, slides: [...h.slider.slides, { badge: "NEW", title1: "Naya", title2: "SLIDE", subtitle: "Yahan subtitle likho", emoji: "🎁", bg: BG_PRESETS[0].value }] } }))}
+                onClick={() => setHomepage((h) => ({ ...h, slider: { ...h.slider, slides: [...h.slider.slides, { badge: "", title1: "", title2: "", subtitle: "", emoji: "", bg: BG_PRESETS[0].value }] } }))}
                 className="flex items-center gap-1.5 text-sm font-semibold text-orange-500 border border-orange-300 hover:bg-orange-50 px-4 py-2 rounded-xl transition-colors"
               >
-                <Plus className="w-4 h-4" /> Add Slide
+                <Plus className="w-4 h-4" /> Add Banner
               </button>
             </div>
           </div>
         )}
+      </div>
+
+      {/* ── Homepage Section Order ── */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-6">
+        <h2 className="font-semibold text-gray-900 mb-1">Homepage Sections — Order</h2>
+        <p className="text-xs text-gray-400 mb-4">⬆️⬇️ se sections ka order badlo — homepage pe isi order mein dikhenge</p>
+        <div className="space-y-2">
+          {homepage.sectionOrder.map((key, i) => (
+            <div key={key} className="flex items-center gap-3 border border-gray-100 rounded-xl px-4 py-2.5">
+              <span className="text-sm text-gray-700 flex-1">{SECTION_LABELS[key] ?? key}</span>
+              <button
+                disabled={i === 0}
+                onClick={() => setHomepage((h) => {
+                  const arr = [...h.sectionOrder];
+                  [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]];
+                  return { ...h, sectionOrder: arr };
+                })}
+                className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-30"
+              >⬆️</button>
+              <button
+                disabled={i === homepage.sectionOrder.length - 1}
+                onClick={() => setHomepage((h) => {
+                  const arr = [...h.sectionOrder];
+                  [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]];
+                  return { ...h, sectionOrder: arr };
+                })}
+                className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-30"
+              >⬇️</button>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* ── Flash Deal ── */}
@@ -341,11 +375,11 @@ export default function SettingsForm({ settings, razorpaySet }: { settings: Reco
             <input className={inputClass} placeholder="🎬 Video URL (YouTube / Instagram reel link)" value={homepage.story.videoUrl.startsWith("data:") ? "" : homepage.story.videoUrl} onChange={(e) => setHomepage((h) => ({ ...h, story: { ...h.story, videoUrl: e.target.value } }))} />
             {/* Video file upload — website pe inline play hoga */}
             <label className="flex items-center justify-center gap-1.5 border-2 border-dashed border-orange-200 rounded-xl py-2.5 text-xs font-semibold cursor-pointer hover:border-orange-400 transition-colors">
-              {homepage.story.videoUrl.startsWith("data:video") ? "🎬 Video uploaded ✓ — change karne ke liye click karo" : "⬆️ Ya video file upload karo (max 7MB, MP4)"}
+              {homepage.story.videoUrl.startsWith("data:video") ? "🎬 Video uploaded ✓ — change karne ke liye click karo" : "⬆️ Ya video file upload karo (max 4MB MP4 — badi video YouTube link se, wo bhi website ke andar hi chalegi)"}
               <input type="file" accept="video/mp4,video/webm" className="hidden" onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
-                if (file.size > 7 * 1024 * 1024) { alert("Video 7MB se chhota hona chahiye. Badi video ke liye YouTube link use karo."); return; }
+                if (file.size > 4 * 1024 * 1024) { alert("Hosting limit ki wajah se file 4MB tak ho sakti hai. 30MB jaisi badi video YouTube pe 'Unlisted' upload karke link yahan daalo — website ke andar hi inline play hogi."); return; }
                 const reader = new FileReader();
                 reader.onload = () => setHomepage((h) => ({ ...h, story: { ...h.story, videoUrl: reader.result as string } }));
                 reader.readAsDataURL(file);
@@ -374,6 +408,31 @@ export default function SettingsForm({ settings, razorpaySet }: { settings: Reco
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Search Bar Text</label>
             <input className={inputClass} value={theme.searchPlaceholder} onChange={(e) => setTheme((t) => ({ ...t, searchPlaceholder: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Logo Size (height px) — sabhi headers pe apply</label>
+            <div className="flex items-center gap-3">
+              <input type="range" min={24} max={80} value={theme.logoHeight} onChange={(e) => setTheme((t) => ({ ...t, logoHeight: Number(e.target.value) }))} className="flex-1 accent-orange-500" />
+              <span className="text-sm font-semibold w-14 text-right">{theme.logoHeight}px</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Category Tile Size</label>
+              <select className={inputClass + " bg-white"} value={theme.categoryStyle.size} onChange={(e) => setTheme((t) => ({ ...t, categoryStyle: { ...t.categoryStyle, size: e.target.value } }))}>
+                <option value="sm">Small</option>
+                <option value="md">Medium</option>
+                <option value="lg">Large</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Category Tile Shape</label>
+              <select className={inputClass + " bg-white"} value={theme.categoryStyle.shape} onChange={(e) => setTheme((t) => ({ ...t, categoryStyle: { ...t.categoryStyle, shape: e.target.value } }))}>
+                <option value="rounded">Rounded</option>
+                <option value="circle">Circle</option>
+                <option value="square">Square</option>
+              </select>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Header Icons (show/hide)</label>

@@ -39,6 +39,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         heightIn: body.heightIn ? parseFloat(body.heightIn) : null,
         noReturnPolicy: !!body.noReturnPolicy,
         attributes: body.attributes ?? undefined,
+        customizeEnabled: body.customizeEnabled !== false,
       },
     });
 
@@ -79,6 +80,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     return NextResponse.json({ success: true });
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+  }
+}
+
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    // Remove dependents first (fields/options/templates cascade via relations)
+    const fields = await db.productField.findMany({ where: { productId: id }, select: { id: true } });
+    for (const f of fields) await db.fieldOption.deleteMany({ where: { fieldId: f.id } });
+    await db.productField.deleteMany({ where: { productId: id } });
+    await db.frameTemplate.deleteMany({ where: { productId: id } });
+    try {
+      await db.product.delete({ where: { id } });
+      return NextResponse.json({ success: true, deleted: true });
+    } catch {
+      // Orders reference this product — can't hard delete; hide it instead
+      await db.product.update({ where: { id }, data: { isActive: false } });
+      return NextResponse.json({ success: true, deleted: false, message: "Is product ke orders hain isliye delete nahi ho sakta — Hidden kar diya gaya hai" });
+    }
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }

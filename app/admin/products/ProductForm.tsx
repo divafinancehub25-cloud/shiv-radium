@@ -143,6 +143,7 @@ type Product = {
   heightIn?: number | null;
   noReturnPolicy?: boolean;
   attributes?: { name: string; values: string[] }[] | null;
+  customizeEnabled?: boolean;
 };
 
 const ATTRIBUTE_QUICK = ["Size", "Quality", "Colour", "Custom"];
@@ -187,6 +188,7 @@ export default function ProductForm({ categories, product }: { categories: Categ
     widthIn: product?.widthIn?.toString() ?? "",
     heightIn: product?.heightIn?.toString() ?? "",
     noReturnPolicy: product?.noReturnPolicy ?? false,
+    customizeEnabled: product?.customizeEnabled ?? true,
   });
 
   const [attributes, setAttributes] = useState<{ name: string; valuesText: string }[]>(
@@ -445,6 +447,10 @@ export default function ProductForm({ categories, product }: { categories: Categ
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={form.isFeatured} onChange={(e) => setFormValue("isFeatured", e.target.checked)} className="w-4 h-4 accent-orange-500" />
                 <span className="text-sm text-gray-700">Featured ⭐</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.customizeEnabled} onChange={(e) => setFormValue("customizeEnabled", e.target.checked)} className="w-4 h-4 accent-orange-500" />
+                <span className="text-sm text-gray-700">✔️ Customize option <span className="text-gray-400 text-xs">(off = customer ko customize nahi dikhega)</span></span>
               </label>
             </div>
             <div className="md:col-span-2">

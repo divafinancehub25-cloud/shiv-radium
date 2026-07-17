@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import CustomizerTool from "@/components/CustomizerTool";
 import FrameCustomizer from "@/components/FrameCustomizer";
 import LogoMark from "@/components/LogoMark";
+import ReviewSection from "@/components/ReviewSection";
 import { getStorefrontConfig } from "@/lib/storefront";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +39,16 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
 
   const config = await getStorefrontConfig();
 
+  const reviewRows = await db.productReview.findMany({
+    where: { productId: product.id, approved: true },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
+  const reviews = reviewRows.map((r) => ({
+    id: r.id, name: r.name, rating: r.rating, text: r.text,
+    images: r.images, videoUrl: r.videoUrl, createdAt: r.createdAt.toISOString(),
+  }));
+
   const frameTemplates = product.frameTemplates.map((t) => ({
     id: t.id,
     name: t.name,
@@ -62,6 +73,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     heightIn: product.heightIn,
     noReturnPolicy: product.noReturnPolicy,
     attributes: (product.attributes as { name: string; values: string[] }[] | null) ?? null,
+    customizeEnabled: product.customizeEnabled,
   };
 
   const serializedProduct = {
@@ -79,7 +91,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       {/* Navbar */}
       <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <LogoMark logo={config.storeLogo} name={config.storeName} />
+          <LogoMark logo={config.storeLogo} name={config.storeName} height={config.theme.logoHeight} />
           <div className="flex items-center gap-3">
             <Link href={`/category/${product.category.slug}`} className="flex items-center gap-1 text-sm text-gray-500 hover:text-orange-500 transition-colors">
               <ArrowLeft className="w-4 h-4" /> Back
@@ -109,6 +121,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       ) : (
         <CustomizerTool product={serializedProduct} />
       )}
+
+      {/* Customer reviews with photo/video */}
+      <ReviewSection productId={product.id} initialReviews={reviews} />
     </div>
   );
 }

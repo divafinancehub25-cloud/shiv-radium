@@ -29,6 +29,7 @@ type Product = {
   previewPosition?: string;
   features?: { drag?: boolean; textSize?: boolean; photoZoom?: boolean; whatsappBadge?: boolean } | null;
   sampleDesigns?: string[];
+  customizeEnabled?: boolean;
 } & ExtrasProduct;
 
 // Default overlay coordinates (%) per admin-set position
@@ -420,6 +421,7 @@ export default function CustomizerTool({ product }: { product: Product }) {
 
         {/* ── Right: Customization Form ── */}
         <div className="space-y-5">
+          {product.customizeEnabled !== false && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
             <h2 className="text-lg font-bold text-gray-900 mb-1">Customize Your Order</h2>
             <p className="text-sm text-gray-400 mb-6">Jaise type karoge, waise hi left preview mein dikhega ✨</p>
@@ -698,6 +700,7 @@ export default function CustomizerTool({ product }: { product: Product }) {
               })}
             </div>
           </div>
+          )}
 
           {/* Attributes — Size / Quality / Colour / custom */}
           {(product.attributes?.length ?? 0) > 0 && (

@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import Link from "next/link";
 import { Plus } from "lucide-react";
+import DeleteButton from "../DeleteButton";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,13 @@ export default async function AdminCategoriesPage() {
                   </span>
                 </td>
                 <td className="px-5 py-3.5">
-                  <Link href={`/admin/categories/${cat.id}`} className="text-sm text-orange-500 hover:text-orange-600">Edit</Link>
+                  <div className="flex items-center gap-3">
+                    <Link href={`/admin/categories/${cat.id}`} className="text-sm text-orange-500 hover:text-orange-600">Edit</Link>
+                    <DeleteButton
+                      url={`/api/admin/categories/${cat.id}`}
+                      confirmText={`"${cat.name}" category delete karni hai?`}
+                    />
+                  </div>
                 </td>
               </tr>
             ))}

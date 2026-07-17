@@ -12,7 +12,7 @@ const navItems = [
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
-export default function AdminShell({ children }: { children: React.ReactNode }) {
+export default function AdminShell({ children, logo, name = "Shiv Radium" }: { children: React.ReactNode; logo?: string | null; name?: string }) {
   const [open, setOpen] = useState(true);
 
   return (
@@ -29,8 +29,13 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       {/* Sidebar */}
       <aside className={`w-56 bg-gray-900 text-white fixed h-full flex flex-col z-40 transition-transform duration-200 ${open ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="p-5 border-b border-gray-800">
-          <p className="text-orange-400 font-bold text-lg">Shiv Radium</p>
-          <p className="text-gray-500 text-xs mt-0.5">Admin Panel</p>
+          {logo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logo} alt={name} className="h-10 w-auto object-contain bg-white rounded-lg p-1" />
+          ) : (
+            <p className="text-orange-400 font-bold text-lg">{name}</p>
+          )}
+          <p className="text-gray-500 text-xs mt-1">Admin Panel</p>
         </div>
         <nav className="flex-1 p-3 space-y-1">
           {navItems.map((item) => (

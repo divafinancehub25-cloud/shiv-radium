@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import Link from "next/link";
 import { Plus, Pencil, Upload } from "lucide-react";
+import DeleteButton from "../DeleteButton";
 
 export const dynamic = "force-dynamic";
 
@@ -63,9 +64,15 @@ export default async function AdminProductsPage() {
                   </span>
                 </td>
                 <td className="px-5 py-3.5">
-                  <Link href={`/admin/products/${product.id}`} className="text-gray-400 hover:text-orange-500 transition-colors">
-                    <Pencil className="w-4 h-4" />
-                  </Link>
+                  <div className="flex items-center gap-3">
+                    <Link href={`/admin/products/${product.id}`} className="text-gray-400 hover:text-orange-500 transition-colors">
+                      <Pencil className="w-4 h-4" />
+                    </Link>
+                    <DeleteButton
+                      url={`/api/admin/products/${product.id}`}
+                      confirmText={`"${product.name}" delete karna hai? Ye wapas nahi aayega.`}
+                    />
+                  </div>
                 </td>
               </tr>
             ))}

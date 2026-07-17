@@ -104,6 +104,8 @@ model Product {
   noReturnPolicy   Boolean  @default(false)
   // Product attributes: [{ name: "Size", values: ["S","M","L"] }] — size/quality/colour/custom
   attributes       Json?
+  // Admin checkbox: off = customer page pe "Customize Your Order" nahi dikhega
+  customizeEnabled Boolean  @default(true)
   // Ready-made sample design images shown to customer for inspiration
   sampleDesigns   String[] @default([])
   createdAt    DateTime @default(now())
@@ -112,10 +114,29 @@ model Product {
   fields         ProductField[]
   orderItems     OrderItem[]
   frameTemplates FrameTemplate[]
+  reviews        ProductReview[]
 
   @@index([categoryId])
   @@index([slug])
   @@index([isActive])
+}
+
+// ─── Product Reviews ──────────────────────────────────────────────────────────
+
+model ProductReview {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String
+  rating    Int      // 1-5
+  text      String?
+  images    String[] @default([])
+  videoUrl  String?
+  approved  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+  @@index([approved])
 }
 
 // ─── Frame Designer Templates ─────────────────────────────────────────────────

@@ -47,6 +47,7 @@ type Product = {
   basePrice: number;
   deliveryDays: number;
   images: string[];
+  customizeEnabled?: boolean;
 } & ExtrasProduct;
 
 const FONT_LABELS: Record<string, string> = {
@@ -374,7 +375,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
           )}
 
           {/* Buy Now / Customize Now */}
-          <div className="grid grid-cols-2 gap-3 mt-5">
+          <div className={`grid ${product.customizeEnabled !== false ? "grid-cols-2" : "grid-cols-1"} gap-3 mt-5`}>
             <button
               onClick={() => addToCart(true)}
               disabled={outOfStock}
@@ -382,12 +383,14 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
             >
               <Zap className="w-4 h-4" /> {outOfStock ? "Out of Stock" : "Buy Now"}
             </button>
-            <button
-              onClick={() => setCustomizing((c) => !c)}
-              className={`flex items-center justify-center gap-2 font-bold py-3.5 rounded-xl transition-colors border-2 ${customizing ? "border-orange-500 bg-orange-50 text-orange-600" : "border-orange-500 bg-orange-500 hover:bg-orange-600 text-white"}`}
-            >
-              <PenLine className="w-4 h-4" /> {customizing ? "Customizing..." : "Customize Now"}
-            </button>
+            {product.customizeEnabled !== false && (
+              <button
+                onClick={() => setCustomizing((c) => !c)}
+                className={`flex items-center justify-center gap-2 font-bold py-3.5 rounded-xl transition-colors border-2 ${customizing ? "border-orange-500 bg-orange-50 text-orange-600" : "border-orange-500 bg-orange-500 hover:bg-orange-600 text-white"}`}
+              >
+                <PenLine className="w-4 h-4" /> {customizing ? "Customizing..." : "Customize Now"}
+              </button>
+            )}
           </div>
           <p className="text-xs text-gray-400 mt-2 text-center">
             Buy Now = ready design ke saath order • Customize Now = apni photo/text/color lagao
