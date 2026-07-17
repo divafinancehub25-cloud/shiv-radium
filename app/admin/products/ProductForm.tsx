@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, Upload, X } from "lucide-react";
-import FrameDesigner from "./FrameDesigner";
+import FrameDesigner, { type PendingTemplate } from "./FrameDesigner";
 
 // Quick-add attribute presets (reference: Custom Attribute List)
 const ATTRIBUTE_PRESETS: { name: string; field: Omit<Field, "sortOrder"> }[] = [
@@ -205,6 +205,7 @@ export default function ProductForm({ categories, product }: { categories: Categ
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [expandedField, setExpandedField] = useState<number | null>(null);
+  const [pendingTemplate, setPendingTemplate] = useState<PendingTemplate | null>(null);
 
   async function handleSampleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -331,6 +332,14 @@ export default function ProductForm({ categories, product }: { categories: Categ
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Something went wrong");
+      // Create mode: pending frame template ab naye product pe save karo
+      if (!isEdit && pendingTemplate && data.id) {
+        await fetch("/api/admin/frame-templates", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productId: data.id, ...pendingTemplate }),
+        });
+      }
       router.push("/admin/products");
       router.refresh();
     } catch (err) {
@@ -524,7 +533,9 @@ export default function ProductForm({ categories, product }: { categories: Categ
         {/* Attributes */}
         <div className="bg-white rounded-2xl border border-gray-200 p-6">
           <h2 className="font-semibold text-gray-900 mb-1">Attributes</h2>
-          <p className="text-xs text-gray-400 mb-4">Size, Quality, Colour ya custom — jis product mein chahiye add karo, values comma se alag karo. Customer inhe choose karega.</p>
+          <p className="text-xs text-gray-400 mb-4">
+            Size, Quality, Colour ya custom — values comma se alag karo. <strong>Alag price ke liye</strong> value ke saath <code className="bg-gray-100 px-1 rounded">=price</code> likho: <code className="bg-gray-100 px-1 rounded">S, M=50, L=100</code> (M pe +₹50, L pe +₹100)
+          </p>
           <div className="flex flex-wrap gap-2 mb-4">
             {ATTRIBUTE_QUICK.map((name) => (
               <button
@@ -550,7 +561,7 @@ export default function ProductForm({ categories, product }: { categories: Categ
                 />
                 <input
                   className="border border-gray-200 rounded-lg px-3 py-2 text-sm flex-1 w-full focus:outline-none focus:ring-1 focus:ring-orange-400"
-                  placeholder="Values — comma se alag (e.g. S, M, L, XL)"
+                  placeholder="Values — comma se alag (e.g. S, M=50, L=100)"
                   value={attr.valuesText}
                   onChange={(e) => setAttributes((p) => p.map((a, ai) => ai === i ? { ...a, valuesText: e.target.value } : a))}
                 />
@@ -642,15 +653,12 @@ export default function ProductForm({ categories, product }: { categories: Categ
           </div>
         </div>
 
-        {/* Frame Designer — admin drag-drop template builder */}
-        {isEdit ? (
-          <FrameDesigner productId={product!.id} productImage={images[0] ?? null} />
-        ) : (
-          <div className="bg-white rounded-2xl border border-gray-200 p-6">
-            <h2 className="font-semibold text-gray-900 mb-1">🖼️ Frame Designer</h2>
-            <p className="text-xs text-gray-400">Pehle product create karo — uske baad edit mein Frame Designer khulega</p>
-          </div>
-        )}
+        {/* Frame Designer — create mode mein bhi khula, product save hote hi template save */}
+        <FrameDesigner
+          productId={product?.id ?? null}
+          productImage={images[0] ?? null}
+          onPending={(tpl) => setPendingTemplate(tpl)}
+        />
 
         {/* Save Button */}
         <div className="flex gap-3 justify-end">

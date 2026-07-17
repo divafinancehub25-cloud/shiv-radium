@@ -15,6 +15,8 @@ export default function FlashDeal({
   story?: HomepageConfig["story"];
 }) {
   const [secs, setSecs] = useState(2 * 24 * 3600 + 14 * 3600 + 32 * 60 + 47);
+  const [videoOpen, setVideoOpen] = useState(false);
+  const isPlayable = !!story?.videoUrl && (story.videoUrl.startsWith("data:video") || /\.(mp4|webm)(\?|$)/i.test(story.videoUrl));
 
   useEffect(() => {
     const t = setInterval(() => setSecs((s) => (s > 0 ? s - 1 : 0)), 1000);
@@ -72,7 +74,15 @@ export default function FlashDeal({
             <p className="text-orange-100 text-[10px] mt-1">Watch & Know More About Shiv Radium</p>
           </div>
           <div className="flex items-center justify-center mt-3">
-            {story?.videoUrl ? (
+            {isPlayable ? (
+              <button
+                onClick={() => setVideoOpen(true)}
+                className="w-10 h-10 bg-white/20 hover:bg-white/40 rounded-full flex items-center justify-center border-2 border-white/40 transition-colors"
+                title="Story video dekho"
+              >
+                <span className="text-white text-base ml-0.5">▶</span>
+              </button>
+            ) : story?.videoUrl ? (
               <a
                 href={story.videoUrl}
                 target="_blank"
@@ -88,6 +98,16 @@ export default function FlashDeal({
               </div>
             )}
           </div>
+          {/* Inline video modal */}
+          {videoOpen && isPlayable && (
+            <div className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4" onClick={() => setVideoOpen(false)}>
+              <div className="relative w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+                <button onClick={() => setVideoOpen(false)} className="absolute -top-9 right-0 text-white text-sm font-bold bg-white/20 rounded-full px-3 py-1">✕ Close</button>
+                <video src={story!.videoUrl} controls autoPlay playsInline className="w-full rounded-2xl shadow-2xl bg-black" />
+              </div>
+            </div>
+          )}
+
           {/* Social story links */}
           {socials.length > 0 && (
             <div className="flex items-center justify-center gap-2 mt-3">

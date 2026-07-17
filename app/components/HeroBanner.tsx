@@ -50,6 +50,12 @@ export default function HeroBanner({
         .hero-zoom { animation: heroZoom 0.5s ease both; }
         .hero-slideup { animation: heroSlideUp 0.5s ease both; }
       `}</style>
+      {slide.fullImage ? (
+        <Link key={current} href={slide.link || "/products"} className={`block ${motionClass}`}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={slide.fullImage} alt={slide.title1 || "Slide"} className="w-full h-auto object-cover" />
+        </Link>
+      ) : (
       <div key={current} className={`px-5 py-6 flex items-center gap-4 ${motionClass}`}>
         <div className="flex-1">
           <span className="bg-orange-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
@@ -77,6 +83,7 @@ export default function HeroBanner({
           <div className="text-7xl select-none">{slide.emoji}</div>
         )}
       </div>
+      )}
       {/* Dots */}
       {list.length > 1 && (
         <div className="flex justify-center gap-1.5 pb-3">

@@ -3,7 +3,8 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ShoppingCart, Upload, Zap, PenLine, X } from "lucide-react";
-import { PriceTag, ProductBadges, AttributePicker, effectivePrice, isOutOfStock, type ExtrasProduct } from "@/components/ProductExtras";
+import { PriceTag, ProductBadges, AttributePicker, effectivePrice, isOutOfStock, attrExtra, type ExtrasProduct } from "@/components/ProductExtras";
+import CropModal from "@/components/CropModal";
 
 // ─── Types (mirror of admin FrameDesigner) ──────────────────────────────────
 
@@ -71,10 +72,12 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
   const [textSize, setTextSize] = useState<number | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [selectedAttrs, setSelectedAttrs] = useState<Record<string, string>>({});
-  const price = effectivePrice(product);
   const outOfStock = isOutOfStock(product);
+  // Attribute value price extras (e.g. "L=100" = +₹100)
+  const price = effectivePrice(product) + attrExtra(product.attributes, selectedAttrs);
   const [uploading, setUploading] = useState<string | null>(null);
   const [fontOpen, setFontOpen] = useState(false);
+  const [cropState, setCropState] = useState<{ file: File; elId: string; aspect: number } | null>(null);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const canvasRef = useRef<HTMLDivElement>(null);
   const scaleDragRef = useRef<{ elId: string; mode: "scale" | "pan"; startX: number; startY: number; origScale: number; origX: number; origY: number; elW: number; elH: number } | null>(null);
@@ -341,7 +344,8 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) uploadImage(el.id, file);
+              // Crop first — box ke preset shape mein
+              if (file) setCropState({ file, elId: el.id, aspect: (el.w / el.h) * (opts?.bgAspect || 1) });
               e.target.value = "";
             }}
           />
@@ -403,9 +407,13 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                   <input
                     className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 pr-9"
                     placeholder={el.text}
+                    maxLength={el.text?.length || 30}
                     value={overrides[el.id]?.text ?? ""}
-                    onChange={(e) => setOverrides((p) => ({ ...p, [el.id]: { ...p[el.id], text: e.target.value } }))}
+                    onChange={(e) => setOverrides((p) => ({ ...p, [el.id]: { ...p[el.id], text: e.target.value.slice(0, el.text?.length || 30) } }))}
                   />
+                  <span className="absolute right-9 top-1/2 -translate-y-1/2 text-[10px] text-gray-300">
+                    {(overrides[el.id]?.text ?? "").length}/{el.text?.length || 30}
+                  </span>
                   {overrides[el.id]?.text && (
                     <button
                       onClick={() => setOverrides((p) => ({ ...p, [el.id]: { ...p[el.id], text: undefined } }))}
@@ -573,6 +581,20 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
           </div>
         </div>
       </div>
+
+      {/* Crop modal — photo box ke shape mein crop hoti hai */}
+      {cropState && (
+        <CropModal
+          file={cropState.file}
+          aspect={cropState.aspect}
+          onCancel={() => setCropState(null)}
+          onDone={(cropped) => {
+            const elId = cropState.elId;
+            setCropState(null);
+            uploadImage(elId, cropped);
+          }}
+        />
+      )}
     </div>
   );
 }

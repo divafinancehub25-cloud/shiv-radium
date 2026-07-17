@@ -77,6 +77,28 @@ export function ProductBadges({ p }: { p: ExtrasProduct }) {
   );
 }
 
+// Parse "Label=Price" value syntax (e.g. "L=100" = +₹100 extra)
+export function parseAttrValue(v: string): { label: string; extra: number } {
+  const m = v.match(/^(.*?)=\s*(\d+(?:\.\d+)?)\s*$/);
+  if (m) return { label: m[1].trim(), extra: Number(m[2]) };
+  return { label: v, extra: 0 };
+}
+
+// Total extra price from selected attribute values
+export function attrExtra(attributes: { name: string; values: string[] }[] | null | undefined, selected: Record<string, string>): number {
+  if (!attributes) return 0;
+  let sum = 0;
+  for (const attr of attributes) {
+    const sel = selected[attr.name];
+    if (!sel) continue;
+    for (const v of attr.values) {
+      const p = parseAttrValue(v);
+      if (p.label === sel) { sum += p.extra; break; }
+    }
+  }
+  return sum;
+}
+
 // ── Attribute chips (Size / Quality / Colour / custom) ──
 export function AttributePicker({
   attributes,
@@ -96,15 +118,18 @@ export function AttributePicker({
             {attr.name} {selected[attr.name] && <span className="text-orange-500 font-normal">— {selected[attr.name]}</span>}
           </label>
           <div className="flex flex-wrap gap-2">
-            {attr.values.map((v) => (
-              <button
-                key={v}
-                onClick={() => onSelect(attr.name, v)}
-                className={`px-4 py-2 rounded-xl text-sm font-medium border-2 transition-colors ${selected[attr.name] === v ? "border-orange-500 bg-orange-50 text-orange-600" : "border-gray-200 text-gray-700 hover:border-orange-300"}`}
-              >
-                {v}
-              </button>
-            ))}
+            {attr.values.map((v) => {
+              const p = parseAttrValue(v);
+              return (
+                <button
+                  key={v}
+                  onClick={() => onSelect(attr.name, p.label)}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium border-2 transition-colors ${selected[attr.name] === p.label ? "border-orange-500 bg-orange-50 text-orange-600" : "border-gray-200 text-gray-700 hover:border-orange-300"}`}
+                >
+                  {p.label}{p.extra > 0 ? <span className="text-xs text-green-600 font-semibold"> +₹{p.extra}</span> : null}
+                </button>
+              );
+            })}
           </div>
         </div>
       ))}

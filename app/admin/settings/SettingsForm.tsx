@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Upload, Save, Plus, Trash2 } from "lucide-react";
 
-type Slide = { badge: string; title1: string; title2: string; subtitle: string; emoji: string; bg: string; image?: string };
+type Slide = { badge: string; title1: string; title2: string; subtitle: string; emoji: string; bg: string; image?: string; fullImage?: string; link?: string };
 type HomepageConfig = {
   slider: { enabled: boolean; interval: number; motion: string; slides: Slide[] };
   flashDeal: { enabled: boolean; label: string; title: string; highlight: string; subtitle: string; link: string; image?: string };
@@ -257,6 +257,34 @@ export default function SettingsForm({ settings, razorpaySet }: { settings: Reco
                     {slide.image && (
                       <button onClick={() => setSlide(i, { image: undefined })} className="col-span-2 text-xs text-red-400 hover:text-red-600 text-left">✕ Photo hatao (emoji dikhega)</button>
                     )}
+
+                    {/* Full slider image — poora slider isi image se replace */}
+                    <div className="col-span-2 border-t border-gray-100 pt-3 mt-1">
+                      <p className="text-xs font-semibold text-gray-600 mb-1.5">🖼️ Poora Slider Image (banner)</p>
+                      <p className="text-[10px] text-gray-400 mb-2">Ye upload karne par text/emoji ki jagah poora slider isi image se ban jayega</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <label className="flex items-center justify-center gap-1.5 border-2 border-dashed border-orange-200 rounded-xl py-2 text-xs font-semibold cursor-pointer hover:border-orange-400 transition-colors">
+                          {uploadingSlide === i + 1000 ? "Uploading..." : slide.fullImage ? "🔄 Change banner" : "⬆️ Upload full banner"}
+                          <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setUploadingSlide(i + 1000);
+                            const url = await uploadFile(file);
+                            if (url) setSlide(i, { fullImage: url });
+                            setUploadingSlide(null);
+                            e.target.value = "";
+                          }} />
+                        </label>
+                        <input className={inputClass} placeholder="Click link (/products)" value={slide.link ?? ""} onChange={(e) => setSlide(i, { link: e.target.value })} />
+                      </div>
+                      {slide.fullImage && (
+                        <div className="mt-2">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={slide.fullImage} alt="" className="w-full h-16 object-cover rounded-lg border border-gray-100" />
+                          <button onClick={() => setSlide(i, { fullImage: undefined })} className="text-xs text-red-400 hover:text-red-600 mt-1">✕ Banner hatao (text slider wapas)</button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </details>
               ))}
@@ -310,7 +338,23 @@ export default function SettingsForm({ settings, razorpaySet }: { settings: Reco
         </p>
         {homepage.story.enabled && (
           <div className="space-y-3">
-            <input className={inputClass} placeholder="🎬 Video URL (YouTube / Instagram reel link)" value={homepage.story.videoUrl} onChange={(e) => setHomepage((h) => ({ ...h, story: { ...h.story, videoUrl: e.target.value } }))} />
+            <input className={inputClass} placeholder="🎬 Video URL (YouTube / Instagram reel link)" value={homepage.story.videoUrl.startsWith("data:") ? "" : homepage.story.videoUrl} onChange={(e) => setHomepage((h) => ({ ...h, story: { ...h.story, videoUrl: e.target.value } }))} />
+            {/* Video file upload — website pe inline play hoga */}
+            <label className="flex items-center justify-center gap-1.5 border-2 border-dashed border-orange-200 rounded-xl py-2.5 text-xs font-semibold cursor-pointer hover:border-orange-400 transition-colors">
+              {homepage.story.videoUrl.startsWith("data:video") ? "🎬 Video uploaded ✓ — change karne ke liye click karo" : "⬆️ Ya video file upload karo (max 7MB, MP4)"}
+              <input type="file" accept="video/mp4,video/webm" className="hidden" onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                if (file.size > 7 * 1024 * 1024) { alert("Video 7MB se chhota hona chahiye. Badi video ke liye YouTube link use karo."); return; }
+                const reader = new FileReader();
+                reader.onload = () => setHomepage((h) => ({ ...h, story: { ...h.story, videoUrl: reader.result as string } }));
+                reader.readAsDataURL(file);
+                e.target.value = "";
+              }} />
+            </label>
+            {homepage.story.videoUrl.startsWith("data:video") && (
+              <button onClick={() => setHomepage((h) => ({ ...h, story: { ...h.story, videoUrl: "" } }))} className="text-xs text-red-400 hover:text-red-600">✕ Uploaded video hatao</button>
+            )}
             <input className={inputClass} placeholder="🟢 WhatsApp channel/story link" value={homepage.story.whatsapp} onChange={(e) => setHomepage((h) => ({ ...h, story: { ...h.story, whatsapp: e.target.value } }))} />
             <input className={inputClass} placeholder="📷 Instagram profile/story link" value={homepage.story.instagram} onChange={(e) => setHomepage((h) => ({ ...h, story: { ...h.story, instagram: e.target.value } }))} />
             <input className={inputClass} placeholder="🔵 Facebook page/story link" value={homepage.story.facebook} onChange={(e) => setHomepage((h) => ({ ...h, story: { ...h.story, facebook: e.target.value } }))} />

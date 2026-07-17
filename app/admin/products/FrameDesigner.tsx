@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Plus, Trash2, Save, Image as ImageIcon, Type, Square, Circle, ZoomIn, ZoomOut, ChevronUp, ChevronDown, Copy } from "lucide-react";
+import CropModal from "@/components/CropModal";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -133,7 +134,10 @@ function ColorCodeInput({ onAdd }: { onAdd: (hex: string) => void }) {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export default function FrameDesigner({ productId, productImage }: { productId: string; productImage: string | null }) {
+export type PendingTemplate = { name: string; elements: FrameElement[]; bgImage: string | null; options: CustomerOptions };
+
+// productId null = create mode: design locally, product create hone par save hota hai (onPending)
+export default function FrameDesigner({ productId, productImage, onPending }: { productId: string | null; productImage: string | null; onPending?: (tpl: PendingTemplate) => void }) {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [elements, setElements] = useState<FrameElement[]>([]);
@@ -147,6 +151,7 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
   const [uploadingBg, setUploadingBg] = useState(false);
   const [uploadingImg, setUploadingImg] = useState(false);
   const [newFontName, setNewFontName] = useState("");
+  const [cropState, setCropState] = useState<{ file: File; elId: string; aspect: number } | null>(null);
 
   async function uploadFile(file: File): Promise<string | null> {
     const formData = new FormData();
@@ -191,6 +196,7 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
 
   // ── Load templates ──
   const loadTemplates = useCallback(async () => {
+    if (!productId) return;
     const res = await fetch(`/api/admin/frame-templates?productId=${productId}`);
     const data = await res.json();
     if (res.ok) setTemplates(data.templates.map((t: Template & { elements: unknown }) => ({ ...t, elements: (t.elements as FrameElement[]) ?? [] })));
@@ -322,6 +328,13 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
   // ── Save ──
   async function saveTemplate() {
     if (!templateName.trim()) { setMsg("Template ka naam do"); return; }
+    // Create mode: template locally hold karo — product create hote hi save hoga
+    if (!productId) {
+      const embedded = allCustomFonts.filter((f) => options.fonts.allowed.includes(f.family));
+      onPending?.({ name: templateName.trim(), elements, bgImage, options: { ...options, customFonts: embedded } });
+      setMsg("✅ Template ready — 'Create Product' dabate hi save ho jayega");
+      return;
+    }
     setSaving(true);
     setMsg("");
     try {
@@ -619,13 +632,10 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
                       accept="image/*"
                       className="hidden"
                       disabled={uploadingImg}
-                      onChange={async (e) => {
+                      onChange={(e) => {
                         const file = e.target.files?.[0];
-                        if (!file) return;
-                        setUploadingImg(true);
-                        const url = await uploadFile(file);
-                        if (url) updateSelected({ defaultImage: url });
-                        setUploadingImg(false);
+                        // Crop first — box ke preset shape mein
+                        if (file && selected) setCropState({ file, elId: selected.id, aspect: (selected.w / selected.h) * (options.bgAspect || 1) });
                         e.target.value = "";
                       }}
                     />
@@ -924,6 +934,22 @@ export default function FrameDesigner({ productId, productImage }: { productId: 
           </div>
         </div>
       </div>
+
+      {/* Crop modal for image box default image */}
+      {cropState && (
+        <CropModal
+          file={cropState.file}
+          aspect={cropState.aspect}
+          onCancel={() => setCropState(null)}
+          onDone={async (cropped) => {
+            setCropState(null);
+            setUploadingImg(true);
+            const url = await uploadFile(cropped);
+            if (url) updateSelected({ defaultImage: url });
+            setUploadingImg(false);
+          }}
+        />
+      )}
     </div>
   );
 }

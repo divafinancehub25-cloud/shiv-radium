@@ -2,7 +2,8 @@ import { db } from "@/lib/db";
 
 // ─── Shared storefront config helpers ────────────────────────────────────────
 
-export type Slide = { badge: string; title1: string; title2: string; subtitle: string; emoji: string; bg: string; image?: string };
+// fullImage set = poora slider us image se replace (text/emoji nahi dikhta)
+export type Slide = { badge: string; title1: string; title2: string; subtitle: string; emoji: string; bg: string; image?: string; fullImage?: string; link?: string };
 export type HomepageConfig = {
   slider: { enabled: boolean; interval: number; motion: "slide" | "fade" | "zoom" | "slideUp"; slides: Slide[] };
   flashDeal: { enabled: boolean; label: string; title: string; highlight: string; subtitle: string; link: string; image?: string };

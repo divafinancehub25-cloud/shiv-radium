@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { ArrowLeft } from "lucide-react";
 import CustomizerTool from "@/components/CustomizerTool";
 import FrameCustomizer from "@/components/FrameCustomizer";
+import LogoMark from "@/components/LogoMark";
+import { getStorefrontConfig } from "@/lib/storefront";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +35,8 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   });
 
   if (!product) notFound();
+
+  const config = await getStorefrontConfig();
 
   const frameTemplates = product.frameTemplates.map((t) => ({
     id: t.id,
@@ -75,9 +79,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       {/* Navbar */}
       <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="text-2xl font-bold text-orange-500">
-            Shiv <span className="text-gray-900">Radium</span>
-          </Link>
+          <LogoMark logo={config.storeLogo} name={config.storeName} />
           <div className="flex items-center gap-3">
             <Link href={`/category/${product.category.slug}`} className="flex items-center gap-1 text-sm text-gray-500 hover:text-orange-500 transition-colors">
               <ArrowLeft className="w-4 h-4" /> Back

@@ -3,7 +3,7 @@
 import { useState, useRef, useMemo } from "react";
 import { ShoppingCart, Upload, ChevronDown, ChevronUp, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { PriceTag, ProductBadges, AttributePicker, effectivePrice, isOutOfStock, type ExtrasProduct } from "@/components/ProductExtras";
+import { PriceTag, ProductBadges, AttributePicker, effectivePrice, isOutOfStock, attrExtra, type ExtrasProduct } from "@/components/ProductExtras";
 
 type Field = {
   id: string;
@@ -60,8 +60,9 @@ export default function CustomizerTool({ product }: { product: Product }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [quantity, setQuantity] = useState(1);
   const [selectedAttrs, setSelectedAttrs] = useState<Record<string, string>>({});
-  const price = effectivePrice(product);
   const outOfStock = isOutOfStock(product);
+  // Attribute value price extras (e.g. "L=100" = +₹100)
+  const price = effectivePrice(product) + attrExtra(product.attributes, selectedAttrs);
   const [selectedImage, setSelectedImage] = useState(0);
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [fontOpen, setFontOpen] = useState<Record<string, boolean>>({});
