@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { ArrowLeft } from "lucide-react";
+import LogoMark from "@/components/LogoMark";
+import { getStorefrontConfig } from "@/lib/storefront";
 
 export const dynamic = "force-dynamic";
 
@@ -27,14 +29,14 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
 
   if (!category) notFound();
 
+  const config = await getStorefrontConfig();
+
   return (
     <div className="min-h-screen bg-white">
       {/* Navbar */}
       <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="text-2xl font-bold text-orange-500">
-            Shiv <span className="text-gray-900">Radium</span>
-          </Link>
+          <LogoMark logo={config.storeLogo} name={config.storeName} />
           <Link href="/cart" className="border border-gray-200 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors">
             Cart
           </Link>
@@ -97,7 +99,17 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
                   </h3>
                   <p className="text-xs text-gray-400 line-clamp-2 mb-3">{product.description}</p>
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-gray-900">₹{Number(product.basePrice)}</span>
+                    {product.salePrice && Number(product.salePrice) < Number(product.basePrice) ? (
+                      <span className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-gray-900">₹{Number(product.salePrice)}</span>
+                        <span className="text-xs text-gray-400 line-through">₹{Number(product.basePrice)}</span>
+                        <span className="text-[10px] font-bold text-green-600">
+                          {product.discountPct ?? Math.round((1 - Number(product.salePrice) / Number(product.basePrice)) * 100)}% OFF
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="font-bold text-gray-900">₹{Number(product.basePrice)}</span>
+                    )}
                     <span className="text-xs text-gray-400">{product.deliveryDays}d delivery</span>
                   </div>
                 </div>

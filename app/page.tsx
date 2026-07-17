@@ -5,6 +5,7 @@ import HeroBanner from "@/app/components/HeroBanner";
 import FlashDeal from "@/app/components/FlashDeal";
 import LocationBar from "@/app/components/LocationBar";
 import BottomNav from "@/app/components/BottomNav";
+import { getStorefrontConfig } from "@/lib/storefront";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ function StarRating({ rating, count }: { rating: number; count: number }) {
 }
 
 export default async function HomePage() {
-  const [categories, featuredProducts, settings] = await Promise.all([
+  const [categories, featuredProducts, config] = await Promise.all([
     db.category.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
     db.product.findMany({
       where: { isActive: true, isFeatured: true },
@@ -33,19 +34,15 @@ export default async function HomePage() {
       orderBy: { sortOrder: "asc" },
       take: 8,
     }),
-    db.setting.findMany({ where: { key: { in: ["store_logo", "store_name", "store_phone"] } } }),
+    getStorefrontConfig(),
   ]);
 
-  const s: Record<string, string> = {};
-  for (const row of settings) s[row.key] = row.value;
-  const storeName = s.store_name ?? "Shiv Radium";
-  const storeLogo = s.store_logo ?? null;
+  const { storeName, storeLogo, homepage, theme } = config;
+  const brand = theme.primary;
 
   // Static ratings for display (no rating field in DB)
   const productRatings = [4.5, 4.4, 4.3, 4.5, 4.2, 4.6, 4.1, 4.4];
   const productReviews = [128, 96, 74, 53, 89, 112, 67, 45];
-  // Calculate fake MRP (~30-40% higher)
-  const discountPct = [36, 36, 33, 33, 28, 40, 30, 35];
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
@@ -72,24 +69,30 @@ export default async function HomePage() {
 
             {/* Search bar */}
             <Link href="/products" className="flex-1 flex items-center gap-2 bg-gray-100 rounded-xl px-3 py-2.5 hover:bg-orange-50 transition-colors group">
-              <Search className="w-4 h-4 text-orange-400" />
-              <span className="text-sm text-gray-400 group-hover:text-orange-400 transition-colors">Search for products...</span>
+              <Search className="w-4 h-4" style={{ color: brand }} />
+              <span className="text-sm text-gray-400 transition-colors">{theme.searchPlaceholder}</span>
             </Link>
 
-            {/* Icons */}
+            {/* Icons — admin toggles */}
             <div className="flex items-center gap-1">
-              <Link href="/login" className="relative p-2 hover:bg-gray-100 rounded-xl transition-colors">
-                <Heart className="w-5 h-5 text-gray-600" />
-                <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-orange-500 rounded-full text-white text-[8px] flex items-center justify-center font-bold">2</span>
-              </Link>
-              <Link href="/cart" className="relative p-2 hover:bg-gray-100 rounded-xl transition-colors">
-                <ShoppingCart className="w-5 h-5 text-gray-600" />
-                <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-orange-500 rounded-full text-white text-[8px] flex items-center justify-center font-bold">5</span>
-              </Link>
-              <Link href="/track" className="relative p-2 hover:bg-gray-100 rounded-xl transition-colors">
-                <Bell className="w-5 h-5 text-gray-600" />
-                <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-orange-500 rounded-full text-white text-[8px] flex items-center justify-center font-bold">3</span>
-              </Link>
+              {theme.icons.wishlist && (
+                <Link href="/login" className="relative p-2 hover:bg-gray-100 rounded-xl transition-colors">
+                  <Heart className="w-5 h-5 text-gray-600" />
+                  <span className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full text-white text-[8px] flex items-center justify-center font-bold" style={{ background: brand }}>2</span>
+                </Link>
+              )}
+              {theme.icons.cart && (
+                <Link href="/cart" className="relative p-2 hover:bg-gray-100 rounded-xl transition-colors">
+                  <ShoppingCart className="w-5 h-5 text-gray-600" />
+                  <span className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full text-white text-[8px] flex items-center justify-center font-bold" style={{ background: brand }}>5</span>
+                </Link>
+              )}
+              {theme.icons.bell && (
+                <Link href="/track" className="relative p-2 hover:bg-gray-100 rounded-xl transition-colors">
+                  <Bell className="w-5 h-5 text-gray-600" />
+                  <span className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full text-white text-[8px] flex items-center justify-center font-bold" style={{ background: brand }}>3</span>
+                </Link>
+              )}
             </div>
           </div>
 
@@ -99,8 +102,10 @@ export default async function HomePage() {
       </header>
 
       <div className="max-w-lg mx-auto md:max-w-7xl">
-        {/* ── Hero Banner ── */}
-        <HeroBanner />
+        {/* ── Hero Banner (admin-configurable, on/off) ── */}
+        {homepage.slider.enabled && (
+          <HeroBanner slides={homepage.slider.slides} interval={homepage.slider.interval} motion={homepage.slider.motion} />
+        )}
 
         {/* ── Category Menu ── */}
         <div className="mt-5 px-3">
@@ -151,8 +156,8 @@ export default async function HomePage() {
           </div>
         </div>
 
-        {/* ── Flash Deal + Our Story ── */}
-        <FlashDeal />
+        {/* ── Flash Deal + Our Story (admin-configurable) ── */}
+        <FlashDeal deal={homepage.flashDeal} story={homepage.story} />
 
         {/* ── Featured Products ── */}
         {featuredProducts.length > 0 && (
@@ -167,9 +172,11 @@ export default async function HomePage() {
               {featuredProducts.map((product, idx) => {
                 const rating = productRatings[idx % productRatings.length];
                 const count = productReviews[idx % productReviews.length];
-                const disc = discountPct[idx % discountPct.length];
-                const price = Number(product.basePrice);
-                const mrp = Math.round(price / (1 - disc / 100));
+                const regular = Number(product.basePrice);
+                const sale = product.salePrice ? Number(product.salePrice) : null;
+                const onSale = sale !== null && sale > 0 && sale < regular;
+                const price = onSale ? sale! : regular;
+                const disc = onSale ? (product.discountPct ?? Math.round((1 - sale! / regular) * 100)) : null;
                 return (
                   <Link
                     key={product.id}
@@ -199,8 +206,8 @@ export default async function HomePage() {
                       <StarRating rating={rating} count={count} />
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
                         <span className="text-sm font-bold text-gray-900">₹{price.toLocaleString("en-IN")}</span>
-                        <span className="text-xs text-gray-400 line-through">₹{mrp.toLocaleString("en-IN")}</span>
-                        <span className="text-[10px] font-bold text-orange-500">{disc}% OFF</span>
+                        {onSale && <span className="text-xs text-gray-400 line-through">₹{regular.toLocaleString("en-IN")}</span>}
+                        {onSale && disc ? <span className="text-[10px] font-bold text-orange-500">{disc}% OFF</span> : null}
                       </div>
                     </div>
                   </Link>

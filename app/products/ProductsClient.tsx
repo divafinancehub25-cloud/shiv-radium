@@ -9,7 +9,9 @@ type Product = {
   name: string;
   slug: string;
   description: string | null;
-  basePrice: unknown;
+  basePrice: number;
+  salePrice?: number | null;
+  discountPct?: number | null;
   deliveryDays: number;
   images: string[];
   category: { name: string; slug: string; icon: string | null };
@@ -84,7 +86,17 @@ export default function ProductsClient({ products, categories }: { products: Pro
                 <h3 className="font-semibold text-gray-900 text-sm leading-tight mb-2 group-hover:text-orange-600 transition-colors">{product.name}</h3>
                 <p className="text-xs text-gray-400 line-clamp-2 mb-3">{product.description}</p>
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-gray-900">₹{Number(product.basePrice)}</span>
+                  {product.salePrice && product.salePrice < product.basePrice ? (
+                    <span className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-bold text-gray-900">₹{product.salePrice}</span>
+                      <span className="text-xs text-gray-400 line-through">₹{product.basePrice}</span>
+                      <span className="text-[10px] font-bold text-green-600">
+                        {product.discountPct ?? Math.round((1 - product.salePrice / product.basePrice) * 100)}% OFF
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="font-bold text-gray-900">₹{product.basePrice}</span>
+                  )}
                   <span className="text-xs text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full">{product.deliveryDays}d delivery</span>
                 </div>
               </div>

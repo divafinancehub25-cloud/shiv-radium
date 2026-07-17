@@ -2,27 +2,42 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { ArrowLeft } from "lucide-react";
 import ProductsClient from "./ProductsClient";
+import LogoMark from "@/components/LogoMark";
+import { getStorefrontConfig } from "@/lib/storefront";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "All Products — Shiv Radium" };
 
 export default async function ProductsPage() {
-  const [products, categories] = await Promise.all([
+  const [rawProducts, categories, config] = await Promise.all([
     db.product.findMany({
       where: { isActive: true },
       include: { category: { select: { name: true, slug: true, icon: true } } },
       orderBy: [{ isFeatured: "desc" }, { sortOrder: "asc" }],
     }),
     db.category.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
+    getStorefrontConfig(),
   ]);
+
+  // Serialize Decimals for the client component
+  const products = rawProducts.map((p) => ({
+    id: p.id,
+    name: p.name,
+    slug: p.slug,
+    description: p.description,
+    basePrice: Number(p.basePrice),
+    salePrice: p.salePrice ? Number(p.salePrice) : null,
+    discountPct: p.discountPct,
+    deliveryDays: p.deliveryDays,
+    images: p.images,
+    category: p.category,
+  }));
 
   return (
     <div className="min-h-screen bg-white">
       <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="text-2xl font-bold text-orange-500">
-            Shiv <span className="text-gray-900">Radium</span>
-          </Link>
+          <LogoMark logo={config.storeLogo} name={config.storeName} />
           <Link href="/cart" className="border border-gray-200 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors">
             Cart
           </Link>
