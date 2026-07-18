@@ -144,6 +144,16 @@ type Product = {
   noReturnPolicy?: boolean;
   attributes?: { name: string; values: string[] }[] | null;
   customizeEnabled?: boolean;
+  variations?: Variation[] | null;
+};
+
+type Variation = {
+  id: string;
+  attrs: Record<string, string>;
+  price: number | string;
+  salePrice?: number | string | null;
+  stockStatus?: string;
+  image?: string;
 };
 
 const ATTRIBUTE_QUICK = ["Size", "Quality", "Colour", "Custom"];
@@ -208,6 +218,41 @@ export default function ProductForm({ categories, product }: { categories: Categ
   const [error, setError] = useState("");
   const [expandedField, setExpandedField] = useState<number | null>(null);
   const [pendingTemplate, setPendingTemplate] = useState<PendingTemplate | null>(null);
+  const [variations, setVariations] = useState<Variation[]>(product?.variations ?? []);
+  const [uploadingVar, setUploadingVar] = useState<string | null>(null);
+
+  // Attribute combos ke liye clean values (bina "=price" ke)
+  function attrCombos(): { name: string; values: string[] }[] {
+    return attributes
+      .map((a) => ({
+        name: a.name.trim(),
+        values: a.valuesText.split(",").map((v) => v.trim().replace(/=\s*\d+(\.\d+)?$/, "").trim()).filter(Boolean),
+      }))
+      .filter((a) => a.name && a.values.length > 0);
+  }
+
+  function generateVariations() {
+    const attrs = attrCombos();
+    if (attrs.length === 0) { setError("Pehle Attributes add karo (Size, Colour...) phir combinations banao"); return; }
+    // Cartesian product of all attribute values
+    let combos: Record<string, string>[] = [{}];
+    for (const a of attrs) {
+      combos = combos.flatMap((c) => a.values.map((v) => ({ ...c, [a.name]: v })));
+    }
+    setVariations((prev) => {
+      const existing = new Map(prev.map((v) => [JSON.stringify(v.attrs), v]));
+      return combos.map((attrs2, i) =>
+        existing.get(JSON.stringify(attrs2)) ?? {
+          id: `var_${Date.now()}_${i}`,
+          attrs: attrs2,
+          price: form.basePrice || "",
+          salePrice: "",
+          stockStatus: "IN_STOCK",
+        }
+      );
+    });
+    setError("");
+  }
 
   async function handleSampleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -329,6 +374,15 @@ export default function ProductForm({ categories, product }: { categories: Categ
           attributes: attributes
             .map((a) => ({ name: a.name.trim(), values: a.valuesText.split(",").map((v) => v.trim()).filter(Boolean) }))
             .filter((a) => a.name && a.values.length > 0),
+          variations: variations.length > 0
+            ? variations
+                .map((v) => ({
+                  ...v,
+                  price: parseFloat(String(v.price)) || 0,
+                  salePrice: v.salePrice !== "" && v.salePrice !== null && v.salePrice !== undefined ? parseFloat(String(v.salePrice)) || null : null,
+                }))
+                .filter((v) => v.price > 0)
+            : null,
         }),
       });
 
@@ -577,6 +631,108 @@ export default function ProductForm({ categories, product }: { categories: Categ
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Variable Product — variations per attribute combination */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="font-semibold text-gray-900">Variable Product — Variations</h2>
+            <button
+              onClick={generateVariations}
+              className="text-xs font-semibold text-orange-500 border border-orange-300 hover:bg-orange-50 px-4 py-1.5 rounded-lg transition-colors"
+            >
+              ⚡ Generate from Attributes
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mb-4">
+            Har attribute combination (e.g. Size M + Colour Red) ka apna price, sale price, stock aur photo.
+            Khaali chhodo to product simple rahega — purane products pe koi asar nahi.
+          </p>
+          {variations.length === 0 ? (
+            <p className="text-xs text-gray-400 border-2 border-dashed border-gray-200 rounded-xl p-4 text-center">
+              Koi variation nahi — Attributes bharke &ldquo;Generate from Attributes&rdquo; dabao
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-gray-500 border-b border-gray-100">
+                    <th className="py-2 pr-3">Variation</th>
+                    <th className="py-2 pr-3">Price (₹)</th>
+                    <th className="py-2 pr-3">Sale (₹)</th>
+                    <th className="py-2 pr-3">Stock</th>
+                    <th className="py-2 pr-3">Photo</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {variations.map((v) => (
+                    <tr key={v.id}>
+                      <td className="py-2 pr-3 font-medium text-gray-800 whitespace-nowrap">
+                        {Object.entries(v.attrs).map(([k, val]) => `${k}: ${val}`).join(" • ")}
+                      </td>
+                      <td className="py-2 pr-3">
+                        <input
+                          className="w-20 border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                          type="number"
+                          value={v.price}
+                          onChange={(e) => setVariations((p) => p.map((x) => x.id === v.id ? { ...x, price: e.target.value } : x))}
+                        />
+                      </td>
+                      <td className="py-2 pr-3">
+                        <input
+                          className="w-20 border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                          type="number"
+                          placeholder="—"
+                          value={v.salePrice ?? ""}
+                          onChange={(e) => setVariations((p) => p.map((x) => x.id === v.id ? { ...x, salePrice: e.target.value } : x))}
+                        />
+                      </td>
+                      <td className="py-2 pr-3">
+                        <select
+                          className="border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none"
+                          value={v.stockStatus ?? "IN_STOCK"}
+                          onChange={(e) => setVariations((p) => p.map((x) => x.id === v.id ? { ...x, stockStatus: e.target.value } : x))}
+                        >
+                          <option value="IN_STOCK">In stock</option>
+                          <option value="OUT_OF_STOCK">Out</option>
+                        </select>
+                      </td>
+                      <td className="py-2 pr-3">
+                        <div className="flex items-center gap-1.5">
+                          {v.image && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={v.image} alt="" className="w-8 h-8 object-cover rounded-lg border border-gray-200" />
+                          )}
+                          <label className="cursor-pointer text-orange-500 hover:text-orange-600 font-semibold">
+                            {uploadingVar === v.id ? "..." : v.image ? "🔄" : "⬆️"}
+                            <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              setUploadingVar(v.id);
+                              const formData = new FormData();
+                              formData.append("file", file);
+                              const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
+                              const data = await res.json();
+                              if (res.ok && data.url) setVariations((p) => p.map((x) => x.id === v.id ? { ...x, image: data.url } : x));
+                              setUploadingVar(null);
+                              e.target.value = "";
+                            }} />
+                          </label>
+                        </div>
+                      </td>
+                      <td className="py-2">
+                        <button onClick={() => setVariations((p) => p.filter((x) => x.id !== v.id))} className="text-gray-300 hover:text-red-500">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <button onClick={() => setVariations([])} className="mt-3 text-xs text-red-400 hover:text-red-600">✕ Saari variations hatao (simple product bana do)</button>
+            </div>
+          )}
         </div>
 
         {/* Product Images */}

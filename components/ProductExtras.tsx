@@ -20,7 +20,38 @@ export type ExtrasProduct = {
   heightIn?: number | null;
   noReturnPolicy?: boolean;
   attributes?: { name: string; values: string[] }[] | null;
+  variations?: Variation[] | null;
 };
+
+// Variable product variation: one attribute combination's own price/stock/image
+export type Variation = {
+  id: string;
+  attrs: Record<string, string>;
+  price: number;
+  salePrice?: number | null;
+  stockStatus?: string;
+  image?: string;
+};
+
+// Find the variation matching the selected attribute values (all must match)
+export function findVariation(variations: Variation[] | null | undefined, selected: Record<string, string>): Variation | null {
+  if (!variations || variations.length === 0) return null;
+  return variations.find((v) => Object.entries(v.attrs).every(([k, val]) => selected[k] === val)) ?? null;
+}
+
+// True when product has variations but customer hasn't picked every attribute yet
+export function variationPending(p: ExtrasProduct, selected: Record<string, string>): boolean {
+  if (!p.variations || p.variations.length === 0) return false;
+  const attrNames = new Set(p.variations.flatMap((v) => Object.keys(v.attrs)));
+  return [...attrNames].some((n) => !selected[n]);
+}
+
+// Effective price considering variations (falls back to simple behavior)
+export function variablePrice(p: ExtrasProduct, selected: Record<string, string>): number {
+  const v = findVariation(p.variations, selected);
+  if (v) return v.salePrice && v.salePrice > 0 && v.salePrice < v.price ? v.salePrice : v.price;
+  return effectivePrice(p) + attrExtra(p.attributes, selected);
+}
 
 export function effectivePrice(p: ExtrasProduct): number {
   return p.salePrice && p.salePrice > 0 && p.salePrice < p.basePrice ? p.salePrice : p.basePrice;

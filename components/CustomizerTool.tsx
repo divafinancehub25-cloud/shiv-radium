@@ -3,7 +3,7 @@
 import { useState, useRef, useMemo } from "react";
 import { ShoppingCart, Upload, ChevronDown, ChevronUp, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { PriceTag, ProductBadges, AttributePicker, effectivePrice, isOutOfStock, attrExtra, type ExtrasProduct } from "@/components/ProductExtras";
+import { PriceTag, ProductBadges, AttributePicker, isOutOfStock, variablePrice, findVariation, variationPending, type ExtrasProduct } from "@/components/ProductExtras";
 
 type Field = {
   id: string;
@@ -61,9 +61,11 @@ export default function CustomizerTool({ product }: { product: Product }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [quantity, setQuantity] = useState(1);
   const [selectedAttrs, setSelectedAttrs] = useState<Record<string, string>>({});
-  const outOfStock = isOutOfStock(product);
-  // Attribute value price extras (e.g. "L=100" = +₹100)
-  const price = effectivePrice(product) + attrExtra(product.attributes, selectedAttrs);
+  // Variable product: matched variation drives price/stock; else simple behavior
+  const variation = findVariation(product.variations, selectedAttrs);
+  const needsVariation = variationPending(product, selectedAttrs);
+  const outOfStock = isOutOfStock(product) || variation?.stockStatus === "OUT_OF_STOCK";
+  const price = variablePrice(product, selectedAttrs);
   const [selectedImage, setSelectedImage] = useState(0);
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [fontOpen, setFontOpen] = useState<Record<string, boolean>>({});
@@ -212,6 +214,10 @@ export default function CustomizerTool({ product }: { product: Product }) {
 
   function addToCart() {
     if (!validate()) return;
+    if (needsVariation) {
+      alert("Pehle saare options select karo (Size/Colour...)");
+      return;
+    }
     const existing = JSON.parse(localStorage.getItem("cart") ?? "[]");
     localStorage.setItem("cart", JSON.stringify([
       ...existing,
@@ -710,6 +716,23 @@ export default function CustomizerTool({ product }: { product: Product }) {
                 selected={selectedAttrs}
                 onSelect={(name, value) => setSelectedAttrs((p) => ({ ...p, [name]: value }))}
               />
+              {needsVariation && (
+                <p className="text-xs text-amber-600 mt-2">👆 Saare options select karo — price uske hisaab se aayega</p>
+              )}
+              {variation && (
+                <div className="mt-3 flex items-center gap-3 bg-orange-50 border border-orange-100 rounded-xl p-3">
+                  {variation.image && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={variation.image} alt="" className="w-12 h-12 object-cover rounded-lg border border-orange-200" />
+                  )}
+                  <p className="text-sm font-semibold text-gray-800">
+                    {Object.values(variation.attrs).join(" • ")}: <span className="text-orange-500">₹{price}</span>
+                    {variation.salePrice && variation.salePrice < variation.price ? (
+                      <span className="text-xs text-gray-400 line-through ml-1.5">₹{variation.price}</span>
+                    ) : null}
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

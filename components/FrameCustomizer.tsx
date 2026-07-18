@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ShoppingCart, Upload, Zap, PenLine, X } from "lucide-react";
-import { PriceTag, ProductBadges, AttributePicker, effectivePrice, isOutOfStock, attrExtra, type ExtrasProduct } from "@/components/ProductExtras";
+import { PriceTag, ProductBadges, AttributePicker, isOutOfStock, variablePrice, findVariation, variationPending, type ExtrasProduct } from "@/components/ProductExtras";
 import CropModal from "@/components/CropModal";
 
 // ─── Types (mirror of admin FrameDesigner) ──────────────────────────────────
@@ -73,9 +73,11 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
   const [textSize, setTextSize] = useState<number | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [selectedAttrs, setSelectedAttrs] = useState<Record<string, string>>({});
-  const outOfStock = isOutOfStock(product);
-  // Attribute value price extras (e.g. "L=100" = +₹100)
-  const price = effectivePrice(product) + attrExtra(product.attributes, selectedAttrs);
+  // Variable product: matched variation drives price/stock; else simple behavior
+  const variation = findVariation(product.variations, selectedAttrs);
+  const needsVariation = variationPending(product, selectedAttrs);
+  const outOfStock = isOutOfStock(product) || variation?.stockStatus === "OUT_OF_STOCK";
+  const price = variablePrice(product, selectedAttrs);
   const [uploading, setUploading] = useState<string | null>(null);
   const [fontOpen, setFontOpen] = useState(false);
   const [cropState, setCropState] = useState<{ file: File; elId: string; aspect: number } | null>(null);
@@ -149,6 +151,10 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
   }
 
   function addToCart(useDefault: boolean) {
+    if (needsVariation) {
+      alert("Pehle saare options select karo (Size/Colour...)");
+      return;
+    }
     const customizationData: Record<string, string> = {
       _frame_template: template.name,
     };
@@ -371,6 +377,23 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                 selected={selectedAttrs}
                 onSelect={(name, value) => setSelectedAttrs((p) => ({ ...p, [name]: value }))}
               />
+              {needsVariation && (
+                <p className="text-xs text-amber-600 mt-2">👆 Saare options select karo — price uske hisaab se aayega</p>
+              )}
+              {variation && (
+                <div className="mt-3 flex items-center gap-3 bg-orange-50 border border-orange-100 rounded-xl p-3">
+                  {variation.image && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={variation.image} alt="" className="w-12 h-12 object-cover rounded-lg border border-orange-200" />
+                  )}
+                  <p className="text-sm font-semibold text-gray-800">
+                    {Object.values(variation.attrs).join(" • ")}: <span className="text-orange-500">₹{price}</span>
+                    {variation.salePrice && variation.salePrice < variation.price ? (
+                      <span className="text-xs text-gray-400 line-through ml-1.5">₹{variation.price}</span>
+                    ) : null}
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

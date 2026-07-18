@@ -74,6 +74,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     noReturnPolicy: product.noReturnPolicy,
     attributes: (product.attributes as { name: string; values: string[] }[] | null) ?? null,
     customizeEnabled: product.customizeEnabled,
+    variations: (product.variations as unknown as { id: string; attrs: Record<string, string>; price: number; salePrice?: number | null; stockStatus?: string; image?: string }[] | null) ?? null,
   };
 
   const serializedProduct = {

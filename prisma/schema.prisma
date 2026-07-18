@@ -106,6 +106,10 @@ model Product {
   attributes       Json?
   // Admin checkbox: off = customer page pe "Customize Your Order" nahi dikhega
   customizeEnabled Boolean  @default(true)
+  // Variable product: attribute-combination-wise price/stock/image.
+  // null = simple product (purana behavior, no disturbance).
+  // [{ id, attrs: {Size:"M",Colour:"Red"}, price, salePrice?, stockStatus?, image? }]
+  variations       Json?
   // Ready-made sample design images shown to customer for inspiration
   sampleDesigns   String[] @default([])
   createdAt    DateTime @default(now())

@@ -40,6 +40,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         noReturnPolicy: !!body.noReturnPolicy,
         attributes: body.attributes ?? undefined,
         customizeEnabled: body.customizeEnabled !== false,
+        variations: body.variations ?? undefined,
       },
     });
 

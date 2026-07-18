@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
         noReturnPolicy: !!body.noReturnPolicy,
         attributes: body.attributes ?? undefined,
         customizeEnabled: body.customizeEnabled !== false,
+        variations: body.variations ?? undefined,
       },
     });
 
