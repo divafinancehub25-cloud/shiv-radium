@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { status, paymentStatus } = await req.json();
+  const { status, paymentStatus, courierName, trackingNumber } = await req.json();
 
   try {
     const order = await db.order.update({
@@ -13,6 +13,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       data: {
         ...(status && { status }),
         ...(paymentStatus && { paymentStatus }),
+        ...(courierName !== undefined && { courierName: courierName || null }),
+        ...(trackingNumber !== undefined && { trackingNumber: trackingNumber || null }),
       },
     });
     return NextResponse.json({ orderId: order.id, status: order.status });

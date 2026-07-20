@@ -16,6 +16,8 @@ type Order = {
   totalAmount: number;
   deliveryDate: string | null;
   createdAt: string;
+  courierName?: string | null;
+  trackingNumber?: string | null;
   items: OrderItem[];
 };
 
@@ -179,6 +181,28 @@ export default function TrackOrderPage() {
                 </div>
               </div>
             </div>
+
+            {/* Shipment tracking */}
+            {order.trackingNumber && (
+              <div className="bg-cyan-50 border border-cyan-100 rounded-2xl p-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <Truck className="w-5 h-5 text-cyan-600" />
+                  <h3 className="font-semibold text-gray-900">Shipment Details</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  {order.courierName && (
+                    <div>
+                      <p className="text-gray-400 text-xs">Courier Partner</p>
+                      <p className="font-medium text-gray-900">{order.courierName}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-gray-400 text-xs">Tracking / AWB Number</p>
+                    <p className="font-bold text-cyan-700">{order.trackingNumber}</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Items */}
             <div className="bg-white rounded-2xl border border-gray-200 p-6">

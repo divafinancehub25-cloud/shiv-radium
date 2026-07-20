@@ -284,6 +284,8 @@ model Order {
   paymentStatus PaymentStatus @default(PENDING)
   razorpayOrderId String?
   razorpayPaymentId String?
+  courierName   String?
+  trackingNumber String?
   giftWrapping  Boolean       @default(false)
   giftMessage   String?
   deliveryDate  DateTime?

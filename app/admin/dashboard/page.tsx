@@ -5,10 +5,13 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboard() {
-  const [totalOrders, pendingOrders, totalRevenue, recentOrders] = await Promise.all([
+  const [totalOrders, pendingOrders, paidRevenue, grossRevenue, productCount, recentOrders] = await Promise.all([
     db.order.count(),
     db.order.count({ where: { status: "PENDING" } }),
     db.order.aggregate({ _sum: { totalAmount: true }, where: { paymentStatus: "PAID" } }),
+    // Gross = all non-cancelled orders (COD orders count even before "PAID")
+    db.order.aggregate({ _sum: { totalAmount: true }, where: { status: { notIn: ["CANCELLED", "REFUNDED"] } } }),
+    db.product.count(),
     db.order.findMany({
       orderBy: { createdAt: "desc" },
       take: 8,
@@ -16,13 +19,15 @@ export default async function AdminDashboard() {
     }),
   ]);
 
-  const revenue = Number(totalRevenue._sum.totalAmount ?? 0);
+  const revenuePaid = Number(paidRevenue._sum.totalAmount ?? 0);
+  const revenueGross = Number(grossRevenue._sum.totalAmount ?? 0);
 
   const stats = [
     { label: "Total Orders", value: totalOrders, icon: ShoppingBag, color: "text-blue-500 bg-blue-50" },
     { label: "Pending Orders", value: pendingOrders, icon: Clock, color: "text-orange-500 bg-orange-50" },
-    { label: "Revenue (Paid)", value: `₹${revenue.toLocaleString("en-IN")}`, icon: TrendingUp, color: "text-green-500 bg-green-50" },
-    { label: "Products", value: await db.product.count(), icon: Package, color: "text-purple-500 bg-purple-50" },
+    { label: "Total Sales (all orders)", value: `₹${revenueGross.toLocaleString("en-IN")}`, icon: TrendingUp, color: "text-indigo-500 bg-indigo-50" },
+    { label: "Revenue (Paid)", value: `₹${revenuePaid.toLocaleString("en-IN")}`, icon: TrendingUp, color: "text-green-500 bg-green-50" },
+    { label: "Products", value: productCount, icon: Package, color: "text-purple-500 bg-purple-50" },
   ];
 
   const statusColors: Record<string, string> = {
@@ -44,7 +49,7 @@ export default async function AdminDashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         {stats.map((stat) => (
           <div key={stat.label} className="bg-white rounded-2xl border border-gray-200 p-5">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${stat.color}`}>

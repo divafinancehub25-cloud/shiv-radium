@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
+import { signAdminSession } from "@/lib/adminSession";
 
 export async function POST(req: NextRequest) {
   const { email, password } = await req.json();
@@ -22,9 +23,10 @@ export async function POST(req: NextRequest) {
   }
 
   const cookieStore = await cookies();
-  cookieStore.set("admin_id", user.id, {
+  cookieStore.set("admin_session", await signAdminSession(user.id), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
     maxAge: 60 * 60 * 24 * 7,
     path: "/",
   });

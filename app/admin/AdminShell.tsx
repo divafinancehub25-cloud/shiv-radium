@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { LayoutDashboard, ShoppingBag, Package, Tag, Settings, MoreVertical } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { LayoutDashboard, ShoppingBag, Package, Tag, Settings, MoreVertical, LogOut } from "lucide-react";
 
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
@@ -14,6 +15,13 @@ const navItems = [
 
 export default function AdminShell({ children, logo, name = "Shiv Radium" }: { children: React.ReactNode; logo?: string | null; name?: string }) {
   const [open, setOpen] = useState(true);
+  const router = useRouter();
+
+  async function logout() {
+    await fetch("/api/auth/admin-logout", { method: "POST" });
+    router.push("/admin/login");
+    router.refresh();
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -49,8 +57,11 @@ export default function AdminShell({ children, logo, name = "Shiv Radium" }: { c
             </Link>
           ))}
         </nav>
-        <div className="p-4 border-t border-gray-800">
-          <Link href="/" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">
+        <div className="p-4 border-t border-gray-800 space-y-3">
+          <button onClick={logout} className="flex items-center gap-2 text-xs text-red-400 hover:text-red-300 transition-colors">
+            <LogOut className="w-3.5 h-3.5" /> Logout
+          </button>
+          <Link href="/" className="block text-xs text-gray-500 hover:text-gray-300 transition-colors">
             ← View Website
           </Link>
         </div>
