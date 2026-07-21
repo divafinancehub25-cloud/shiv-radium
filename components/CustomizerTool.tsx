@@ -359,14 +359,14 @@ export default function CustomizerTool({ product }: { product: Product }) {
             )}
           </div>
 
-          {/* Thumbnail strip */}
+          {/* Thumbnail strip — click to change main image */}
           {product.images?.length > 1 && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
               {product.images.map((img, i) => (
                 <button
                   key={i}
                   onClick={() => setSelectedImage(i)}
-                  className={`w-16 h-16 rounded-xl overflow-hidden border-2 transition-colors ${selectedImage === i ? "border-orange-500" : "border-gray-200"}`}
+                  className={`shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-xl overflow-hidden transition-all ${selectedImage === i ? "ring-2 ring-gray-900 scale-105" : "opacity-70 hover:opacity-100"}`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={img} alt="" className="w-full h-full object-cover" />

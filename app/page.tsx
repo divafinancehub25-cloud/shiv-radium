@@ -6,6 +6,7 @@ import FlashDeal from "@/app/components/FlashDeal";
 import LocationBar from "@/app/components/LocationBar";
 import BottomNav from "@/app/components/BottomNav";
 import { getStorefrontConfig } from "@/lib/storefront";
+import LikeButton from "@/components/LikeButton";
 
 export const dynamic = "force-dynamic";
 
@@ -28,10 +29,11 @@ function StarRating({ rating, count }: { rating: number; count: number }) {
 export default async function HomePage() {
   const [categories, featuredProducts, config] = await Promise.all([
     db.category.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
+    // Featured products first, then the rest (admin's Featured toggle drives order)
     db.product.findMany({
-      where: { isActive: true, isFeatured: true },
+      where: { isActive: true },
       include: { category: { select: { name: true, slug: true, icon: true } } },
-      orderBy: { sortOrder: "asc" },
+      orderBy: [{ isFeatured: "desc" }, { sortOrder: "asc" }, { createdAt: "desc" }],
       take: 8,
     }),
     getStorefrontConfig(),
@@ -121,9 +123,12 @@ export default async function HomePage() {
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-5xl">{product.category.icon}</div>
                   )}
-                  <button className="absolute top-2 right-2 w-7 h-7 bg-white rounded-full shadow flex items-center justify-center">
-                    <Heart className="w-3.5 h-3.5 text-gray-400" />
-                  </button>
+                  <div className="absolute top-2 right-2">
+                    <LikeButton productId={product.id} />
+                  </div>
+                  {product.isFeatured && (
+                    <span className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">⭐ Featured</span>
+                  )}
                 </div>
                 <div className="p-3">
                   <p className="text-xs font-semibold text-gray-900 leading-tight line-clamp-2">{product.name}</p>
@@ -251,6 +256,22 @@ export default async function HomePage() {
               )}
             </div>
           </div>
+
+          {/* Main navigation — categories always accessible */}
+          <nav className="flex items-center gap-1 mt-2 overflow-x-auto scrollbar-hide">
+            <Link href="/products" className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full bg-gray-900 text-white">
+              All Products
+            </Link>
+            {categories.map((c) => (
+              <Link
+                key={c.id}
+                href={`/category/${c.slug}`}
+                className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+              >
+                {c.icon} {c.name}
+              </Link>
+            ))}
+          </nav>
 
           {/* Location bar */}
           <LocationBar />

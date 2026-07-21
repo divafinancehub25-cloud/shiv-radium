@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import SearchBar from "./SearchBar";
+import LikeButton from "@/components/LikeButton";
 
 type Product = {
   id: string;
@@ -73,13 +74,16 @@ export default function ProductsClient({ products, categories }: { products: Pro
               href={`/product/${product.slug}`}
               className="group border border-gray-200 rounded-2xl overflow-hidden hover:shadow-xl hover:border-orange-200 transition-all hover:-translate-y-1"
             >
-              <div className="bg-gray-50 h-48 flex items-center justify-center overflow-hidden group-hover:bg-orange-50 transition-colors">
+              <div className="relative bg-gray-50 h-48 flex items-center justify-center overflow-hidden group-hover:bg-orange-50 transition-colors">
                 {product.images?.[0] ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={product.images[0]} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                 ) : (
                   <span className="text-5xl">{product.category.icon}</span>
                 )}
+                <div className="absolute top-2 right-2">
+                  <LikeButton productId={product.id} />
+                </div>
               </div>
               <div className="p-4">
                 <p className="text-xs text-orange-500 font-medium mb-1">{product.category.icon} {product.category.name}</p>

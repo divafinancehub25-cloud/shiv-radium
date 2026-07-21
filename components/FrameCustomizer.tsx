@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ShoppingCart, Upload, Zap, PenLine, X } from "lucide-react";
 import { PriceTag, ProductBadges, AttributePicker, isOutOfStock, variablePrice, findVariation, variationPending, type ExtrasProduct } from "@/components/ProductExtras";
 import CropModal from "@/components/CropModal";
+import ProductGallery from "@/components/ProductGallery";
 
 // ─── Types (mirror of admin FrameDesigner) ──────────────────────────────────
 
@@ -30,7 +31,20 @@ type CustomerOptions = {
   textSizes: { allowed: { label: string; px: number }[]; default: number };
   customFonts: { label: string; family: string; url?: string; dataUrl?: string }[];
   bgAspect?: number;
+  acrylicMirror?: { enabled: boolean; allowed: string[]; default: string };
 };
+
+// Acrylic mirror finishes (must match admin FrameDesigner list)
+const MIRROR_FINISHES: Record<string, string> = {
+  "Normal Gold": "linear-gradient(135deg,#fdf3c0 0%,#d4af37 35%,#8a6d1f 60%,#f7e690 100%)",
+  "Copper Gold": "linear-gradient(135deg,#f6d3ad 0%,#b87333 40%,#7a4318 65%,#e8b98a 100%)",
+  "Rose Gold": "linear-gradient(135deg,#f9d6d0 0%,#b76e79 40%,#7d4750 65%,#f2c0b8 100%)",
+  "Pink Gold": "linear-gradient(135deg,#ffe3e6 0%,#e0a3a3 40%,#a9666c 65%,#ffd0d6 100%)",
+  "Metallic Gold": "linear-gradient(135deg,#fffbe6 0%,#cfa93f 30%,#6b5310 55%,#ffe98a 80%,#cfa93f 100%)",
+  "Silver Mirror": "linear-gradient(135deg,#ffffff 0%,#c7ccd1 35%,#7d8288 60%,#eef1f4 100%)",
+  "Black Mirror": "linear-gradient(135deg,#6e6e6e 0%,#2b2b2b 40%,#000000 65%,#5a5a5a 100%)",
+};
+const MIRROR_TEXT_SHADOW = "0 1px 0 rgba(255,255,255,.6), 0 2px 2px rgba(0,0,0,.35), 0 4px 6px rgba(0,0,0,.3)";
 
 type Template = {
   id: string;
@@ -80,9 +94,9 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
   const price = variablePrice(product, selectedAttrs);
   const [uploading, setUploading] = useState<string | null>(null);
   const [cropState, setCropState] = useState<{ file: File; elId: string; aspect: number } | null>(null);
-  // Step-by-step customize drawer: 1 = Text/Photo, 2 = Color & Size, 3 = Effects
+  // Step-by-step customize drawer: 1 = Text/Photo, 2 = Color & Size
   const [step, setStep] = useState(1);
-  const [effects, setEffects] = useState({ shadow: false, depth: false });
+  const [mirrorFinish, setMirrorFinish] = useState<string | null>(null);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const canvasRef = useRef<HTMLDivElement>(null);
   const scaleDragRef = useRef<{ elId: string; mode: "scale" | "pan"; startX: number; startY: number; origScale: number; origX: number; origY: number; elW: number; elH: number } | null>(null);
@@ -178,9 +192,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
       if (textColor) customizationData["Text Color"] = textColor;
       if (font) customizationData["Font Style"] = FONT_LABELS[font] ?? font;
       if (textSize) customizationData["Text Size"] = `${textSize}px`;
-      if (effects.shadow || effects.depth) {
-        customizationData["Effects"] = [effects.shadow ? "Shadow" : "", effects.depth ? "3D Depth" : ""].filter(Boolean).join(" + ");
-      }
+      if (mirrorFinish) customizationData["Acrylic Mirror Finish"] = `${mirrorFinish} (4mm mirror, 3D raised)`;
     }
     const existing = JSON.parse(localStorage.getItem("cart") ?? "[]");
     localStorage.setItem("cart", JSON.stringify([
@@ -221,7 +233,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
           key={el.id}
           style={style}
           onClick={() => customizing && fileRefs.current[el.id]?.click()}
-          className={customizing ? "cursor-pointer ring-2 ring-orange-400/70 hover:ring-orange-500" : ""}
+          className={customizing ? "cursor-pointer" : ""}
         >
           {img ? (
             <div style={{ borderRadius }} className="w-full h-full overflow-hidden relative">
@@ -245,7 +257,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
               )}
             </div>
           ) : (
-            <div style={{ borderRadius }} className="w-full h-full bg-gray-100/80 border-2 border-dashed border-gray-300 flex items-center justify-center">
+            <div style={{ borderRadius }} className="w-full h-full bg-gray-100/80 flex items-center justify-center">
               <span className="text-[10px] text-gray-400 text-center px-1">{customizing ? "Tap to add photo" : el.label}</span>
             </div>
           )}
@@ -255,8 +267,9 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
         </div>
       );
     }
-    // text
+    // text — mirror finish overrides plain color with a metallic gradient
     const content = overrides[el.id]?.text ?? el.text;
+    const mirrorGradient = mirrorFinish ? MIRROR_FINISHES[mirrorFinish] : null;
     return (
       <div
         key={el.id}
@@ -265,17 +278,28 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
           fontFamily: font ?? el.fontFamily,
           fontSize: `${textSize ?? el.fontSize}px`,
           fontWeight: el.fontWeight as React.CSSProperties["fontWeight"],
-          color: textColor ?? el.color,
+          color: mirrorGradient ? undefined : (textColor ?? el.color),
           textAlign: el.align,
-          textShadow: effects.depth
-            ? "0 2px 0 rgba(0,0,0,.25), 0 5px 10px rgba(0,0,0,.4)"
-            : effects.shadow
-              ? "1px 2px 4px rgba(0,0,0,.35)"
-              : undefined,
         }}
-        className={`flex items-center overflow-hidden ${customizing ? "ring-1 ring-orange-300/60" : ""}`}
+        className="flex items-center overflow-hidden"
       >
-        <span className="w-full leading-tight" style={{ textAlign: el.align }}>{content}</span>
+        <span
+          className="w-full leading-tight"
+          style={
+            mirrorGradient
+              ? {
+                  textAlign: el.align,
+                  backgroundImage: mirrorGradient,
+                  WebkitBackgroundClip: "text",
+                  backgroundClip: "text",
+                  color: "transparent",
+                  filter: "drop-shadow(0 2px 2px rgba(0,0,0,.35))",
+                }
+              : { textAlign: el.align }
+          }
+        >
+          {content}
+        </span>
       </div>
     );
   }
@@ -300,14 +324,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
 
       {/* ── Left: Product image (customize ab drawer mein khulta hai) ── */}
       <div className="space-y-4">
-        <div className="relative w-full aspect-square bg-white rounded-2xl shadow-sm overflow-hidden flex items-center justify-center">
-          {product.images?.[0] ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={product.images[0]} alt={product.name} className="w-full h-full object-cover" />
-          ) : (
-            <span className="text-8xl">🎁</span>
-          )}
-        </div>
+        <ProductGallery images={product.images} name={product.name} productId={product.id} />
 
         {/* Hidden file inputs per image box */}
         {imageBoxes.map((el) => (
@@ -502,13 +519,13 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
 
               {/* Step indicator */}
               <div className="flex items-center justify-center gap-2">
-                {[{ n: 1, l: "Text & Photo" }, { n: 2, l: "Color & Size" }, { n: 3, l: "Finishing" }].map((s2, i) => (
+                {[{ n: 1, l: "Text & Photo" }, { n: 2, l: "Color & Size" }].map((s2, i) => (
                   <button key={s2.n} onClick={() => setStep(s2.n)} className="flex items-center gap-1.5">
                     <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step === s2.n ? "bg-gray-900 text-amber-300" : step > s2.n ? "bg-green-500 text-white" : "bg-gray-200 text-gray-500"}`}>
                       {step > s2.n ? "✓" : s2.n}
                     </span>
                     <span className={`text-[11px] font-medium ${step === s2.n ? "text-gray-900" : "text-gray-400"}`}>{s2.l}</span>
-                    {i < 2 && <span className="w-4 h-px bg-gray-300 ml-1" />}
+                    {i < 1 && <span className="w-4 h-px bg-gray-300 ml-1" />}
                   </button>
                 ))}
               </div>
@@ -593,6 +610,35 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                       </div>
                     </div>
                   )}
+                  {/* Acrylic Mirror finish — admin-enabled premium option */}
+                  {opts?.acrylicMirror?.enabled && opts.acrylicMirror.allowed.length > 0 && textBoxes.length > 0 && (
+                    <div className="bg-white rounded-2xl shadow-sm p-4">
+                      <label className="block text-sm font-semibold text-gray-800 mb-1">✨ Acrylic Mirror Text</label>
+                      <p className="text-[11px] text-gray-400 mb-2">4mm mirror finish, 3D raised look — premium</p>
+                      <div className="flex flex-wrap gap-3">
+                        {opts.acrylicMirror.allowed.map((label) => (
+                          <button
+                            key={label}
+                            onClick={() => setMirrorFinish(mirrorFinish === label ? null : label)}
+                            style={{ border: "none" }}
+                            className="flex flex-col items-center gap-1"
+                          >
+                            <span
+                              style={{ background: MIRROR_FINISHES[label] ?? "#ccc", boxShadow: MIRROR_TEXT_SHADOW }}
+                              className={`w-11 h-11 rounded-full transition-transform ${mirrorFinish === label ? "ring-4 ring-amber-300 scale-110" : ""}`}
+                            />
+                            <span className={`text-[9px] leading-tight text-center max-w-[62px] ${mirrorFinish === label ? "text-gray-900 font-semibold" : "text-gray-500"}`}>{label}</span>
+                          </button>
+                        ))}
+                      </div>
+                      {mirrorFinish && (
+                        <button onClick={() => setMirrorFinish(null)} style={{ border: "none" }} className="mt-2 text-[11px] text-gray-400 hover:text-gray-600">
+                          ✕ Normal color pe wapas jao
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {opts && opts.fonts.allowed.length > 0 && textBoxes.length > 0 && (
                     <div className="bg-white rounded-2xl shadow-sm p-4">
                       <label className="block text-sm font-semibold text-gray-800 mb-2">🔤 Writing Style</label>
@@ -642,34 +688,6 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                 </div>
               )}
 
-              {/* STEP 3 — Finishing (simple toggles, no technical words) */}
-              {step === 3 && (
-                <div className="space-y-4">
-                  {[
-                    { key: "shadow" as const, icon: "✨", title: "Halka Shadow", desc: "Text ke piche halki chhaya — classy look" },
-                    { key: "depth" as const, icon: "🌟", title: "3D Look", desc: "Text ubhra hua dikhega — premium feel" },
-                  ].map((ef) => (
-                    <div key={ef.key} className="bg-white rounded-2xl shadow-sm p-4 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">{ef.icon}</span>
-                        <div>
-                          <p className="text-sm font-semibold text-gray-800">{ef.title}</p>
-                          <p className="text-[11px] text-gray-400">{ef.desc}</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => setEffects((p) => ({ ...p, [ef.key]: !p[ef.key] }))}
-                        style={{ border: "none" }}
-                        className={`w-14 h-7 rounded-full transition-colors relative ${effects[ef.key] ? "bg-gray-900" : "bg-gray-200"}`}
-                      >
-                        <span className={`absolute top-1 w-5 h-5 rounded-full transition-all ${effects[ef.key] ? "left-8 bg-amber-300" : "left-1 bg-white"}`} />
-                      </button>
-                    </div>
-                  ))}
-                  <p className="text-[11px] text-gray-400 text-center">Ye optional hai — jaise hai waisa bhi bahut sundar banega 😊</p>
-                </div>
-              )}
-
               {/* Step nav */}
               <div className="flex gap-2 pb-2">
                 {step > 1 && (
@@ -677,7 +695,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                     ← Back
                   </button>
                 )}
-                {step < 3 && (
+                {step < 2 && (
                   <button onClick={() => setStep((s2) => s2 + 1)} style={{ border: "none" }} className="flex-1 bg-gray-900 text-amber-300 font-bold py-3 rounded-2xl">
                     Next →
                   </button>

@@ -49,7 +49,23 @@ export type CustomerOptions = {
   customFonts: CustomFont[];
   // canvas aspect ratio = bg image's natural width/height (no cropping)
   bgAspect?: number;
+  // Acrylic mirror text: admin per-product enable + allowed mirror finishes
+  acrylicMirror?: { enabled: boolean; allowed: string[]; default: string };
 };
+
+// Acrylic mirror finishes — premium 4mm mirror look with 3D raised text
+export const ACRYLIC_MIRROR_COLORS = [
+  { label: "Normal Gold", value: "#d4af37", gradient: "linear-gradient(135deg,#fdf3c0 0%,#d4af37 35%,#8a6d1f 60%,#f7e690 100%)" },
+  { label: "Copper Gold", value: "#b87333", gradient: "linear-gradient(135deg,#f6d3ad 0%,#b87333 40%,#7a4318 65%,#e8b98a 100%)" },
+  { label: "Rose Gold", value: "#b76e79", gradient: "linear-gradient(135deg,#f9d6d0 0%,#b76e79 40%,#7d4750 65%,#f2c0b8 100%)" },
+  { label: "Pink Gold", value: "#e0a3a3", gradient: "linear-gradient(135deg,#ffe3e6 0%,#e0a3a3 40%,#a9666c 65%,#ffd0d6 100%)" },
+  { label: "Metallic Gold", value: "#cfa93f", gradient: "linear-gradient(135deg,#fffbe6 0%,#cfa93f 30%,#6b5310 55%,#ffe98a 80%,#cfa93f 100%)" },
+  { label: "Silver Mirror", value: "#c7ccd1", gradient: "linear-gradient(135deg,#ffffff 0%,#c7ccd1 35%,#7d8288 60%,#eef1f4 100%)" },
+  { label: "Black Mirror", value: "#2b2b2b", gradient: "linear-gradient(135deg,#6e6e6e 0%,#2b2b2b 40%,#000000 65%,#5a5a5a 100%)" },
+];
+
+// 3D raised text on 4mm acrylic mirror
+export const MIRROR_TEXT_SHADOW = "0 1px 0 rgba(255,255,255,.6), 0 2px 2px rgba(0,0,0,.35), 0 4px 6px rgba(0,0,0,.3)";
 
 export const TEXT_SIZE_PRESETS = [
   { label: "Small", px: 18 },
@@ -66,6 +82,7 @@ function defaultOptions(): CustomerOptions {
     textSizes: { allowed: TEXT_SIZE_PRESETS.slice(0, 3), default: 24 },
     customFonts: [],
     bgAspect: 1,
+    acrylicMirror: { enabled: false, allowed: ACRYLIC_MIRROR_COLORS.map((c) => c.label), default: "Normal Gold" },
   };
 }
 
@@ -209,7 +226,7 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
     setTemplateName(t.name);
     setElements(t.elements);
     setBgImage(t.bgImage ?? productImage);
-    setOptions({ ...defaultOptions(), ...(t.options ?? {}) });
+    setOptions({ ...defaultOptions(), ...(t.options ?? {}), acrylicMirror: { ...defaultOptions().acrylicMirror!, ...(t.options?.acrylicMirror ?? {}) } });
     setSelectedId(null);
   }
 
@@ -387,7 +404,7 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
         key={el.id}
         style={common}
         onPointerDown={(e) => startDrag(el.id, "move", e)}
-        className={`cursor-move select-none group ${isSel ? "ring-2 ring-orange-500" : "hover:ring-1 hover:ring-orange-300"}`}
+        className={`cursor-move select-none group ${isSel ? "ring-1 ring-gray-400/60" : ""}`}
       >
         {el.type === "image" && (
           el.defaultImage ? (
@@ -410,7 +427,7 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
               )}
             </div>
           ) : (
-            <div style={{ borderRadius }} className="w-full h-full bg-gray-200/90 border-2 border-dashed border-gray-400 flex flex-col items-center justify-center overflow-hidden">
+            <div style={{ borderRadius }} className="w-full h-full bg-gray-200/90 flex flex-col items-center justify-center overflow-hidden">
               <ImageIcon className="w-5 h-5 text-gray-500" />
               <span className="text-[9px] text-gray-500 font-medium px-1 text-center leading-tight">{el.label}</span>
             </div>
@@ -419,7 +436,7 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
         {el.type === "text" && (
           <div
             style={{ fontFamily: el.fontFamily, fontSize: `${el.fontSize}px`, fontWeight: el.fontWeight as React.CSSProperties["fontWeight"], color: el.color, textAlign: el.align, borderRadius }}
-            className="w-full h-full bg-white/60 border border-dashed border-gray-400 flex items-center overflow-hidden px-1"
+            className="w-full h-full bg-white/60 flex items-center overflow-hidden px-1"
           >
             <span className="w-full leading-tight" style={{ textAlign: el.align }}>{el.text}</span>
           </div>
@@ -900,6 +917,62 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
                 }}
               />
             </label>
+          </div>
+
+          {/* Acrylic Mirror Text */}
+          <div className="border border-gray-200 rounded-xl p-4 md:col-span-2">
+            <label className="flex items-center gap-2 cursor-pointer mb-2">
+              <input
+                type="checkbox"
+                checked={options.acrylicMirror?.enabled ?? false}
+                onChange={(e) => setOptions((o) => ({ ...o, acrylicMirror: { ...(o.acrylicMirror ?? { allowed: [], default: "Normal Gold" }), enabled: e.target.checked } }))}
+                className="w-4 h-4 accent-orange-500"
+              />
+              <span className="text-xs font-bold text-gray-800">✨ Acrylic Mirror Text Enable</span>
+              <span className="text-[10px] text-gray-400">(4mm mirror finish, 3D raised text — normal colors bhi rahenge)</span>
+            </label>
+            {options.acrylicMirror?.enabled && (
+              <div className="pl-6 space-y-2">
+                <p className="text-[10px] text-gray-500">Allowed mirror finishes (customer inme se choose karega):</p>
+                <div className="flex flex-wrap gap-3">
+                  {ACRYLIC_MIRROR_COLORS.map((c) => {
+                    const on = options.acrylicMirror!.allowed.includes(c.label);
+                    const isDefault = options.acrylicMirror!.default === c.label;
+                    return (
+                      <button
+                        key={c.label}
+                        onClick={() => setOptions((o) => {
+                          const am = o.acrylicMirror!;
+                          const allowed = on ? am.allowed.filter((x) => x !== c.label) : [...am.allowed, c.label];
+                          return { ...o, acrylicMirror: { ...am, allowed, default: allowed.includes(am.default) ? am.default : (allowed[0] ?? "") } };
+                        })}
+                        className="flex flex-col items-center gap-1"
+                        title={on ? "Click = remove" : "Click = allow"}
+                      >
+                        <span
+                          style={{ background: c.gradient }}
+                          className={`w-11 h-11 rounded-xl shadow-inner transition-transform ${on ? "ring-2 ring-orange-500 scale-105" : "opacity-40"}`}
+                        />
+                        <span className={`text-[9px] leading-tight text-center max-w-[62px] ${on ? "text-gray-700 font-medium" : "text-gray-400"}`}>{c.label}</span>
+                        {isDefault && <span className="text-[8px] bg-orange-100 text-orange-600 px-1 rounded-full font-bold">DEFAULT</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  <span className="text-[10px] text-gray-500">Default:</span>
+                  {options.acrylicMirror.allowed.map((label) => (
+                    <button
+                      key={label}
+                      onClick={() => setOptions((o) => ({ ...o, acrylicMirror: { ...o.acrylicMirror!, default: label } }))}
+                      className={`text-[10px] px-2 py-0.5 rounded-full ${options.acrylicMirror!.default === label ? "bg-orange-500 text-white font-bold" : "bg-gray-100 text-gray-600"}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Text Size */}
