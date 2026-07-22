@@ -2,6 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { ArrowLeft } from "lucide-react";
 import ProductsClient from "./ProductsClient";
+import CategoryMenu from "./CategoryMenu";
 import LogoMark from "@/components/LogoMark";
 import { getStorefrontConfig } from "@/lib/storefront";
 
@@ -36,9 +37,11 @@ export default async function ProductsPage() {
   return (
     <div className="min-h-screen bg-white">
       <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center gap-3">
+          {/* ⋮ Category menu — left of the logo */}
+          <CategoryMenu categories={categories} />
           <LogoMark logo={config.storeLogo} name={config.storeName} height={config.theme.logoHeight} />
-          <Link href="/cart" className="border border-gray-200 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors">
+          <Link href="/cart" className="ml-auto border border-gray-200 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors">
             Cart
           </Link>
         </div>

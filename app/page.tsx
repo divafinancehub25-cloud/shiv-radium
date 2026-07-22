@@ -257,22 +257,6 @@ export default async function HomePage() {
             </div>
           </div>
 
-          {/* Main navigation — categories always accessible */}
-          <nav className="flex items-center gap-1 mt-2 overflow-x-auto scrollbar-hide">
-            <Link href="/products" className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full bg-gray-900 text-white">
-              All Products
-            </Link>
-            {categories.map((c) => (
-              <Link
-                key={c.id}
-                href={`/category/${c.slug}`}
-                className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors"
-              >
-                {c.icon} {c.name}
-              </Link>
-            ))}
-          </nav>
-
           {/* Location bar */}
           <LocationBar />
         </div>
