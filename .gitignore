@@ -45,3 +45,6 @@ next-env.d.ts
 # Local-only files
 /.claude/
 /prisma/seed-debug.mjs
+
+# local dev logs
+*.log

@@ -8,6 +8,10 @@ const transporter = nodemailer.createTransport({
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
+  // Fail fast if SMTP is unreachable / misconfigured, so it never blocks an action.
+  connectionTimeout: 6000,
+  greetingTimeout: 5000,
+  socketTimeout: 6000,
 });
 
 const FROM = process.env.EMAIL_FROM ?? "STICKO Growth Capital <noreply@sticko.app>";
@@ -17,11 +21,20 @@ const BRAND = "STICKO Growth Capital";
 // ─── Core send helper ─────────────────────────────────────────────────────────
 
 async function send(to: string, subject: string, html: string) {
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER) {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
     console.warn("[STICKO Email] SMTP not configured — skipping:", subject, "→", to);
     return;
   }
-  await transporter.sendMail({ from: FROM, to, subject, html });
+  // Never let a slow/broken SMTP block the caller: cap the whole attempt and
+  // swallow any failure (email delivery is best-effort, not critical).
+  try {
+    await Promise.race([
+      transporter.sendMail({ from: FROM, to, subject, html }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("email timeout")), 7000)),
+    ]);
+  } catch (err) {
+    console.warn("[STICKO Email] send failed (ignored):", subject, "→", to, String(err));
+  }
 }
 
 // ─── Base template ────────────────────────────────────────────────────────────
