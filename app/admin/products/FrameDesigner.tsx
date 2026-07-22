@@ -36,7 +36,43 @@ export type FrameElement = {
   imgScale?: number;
   imgX?: number; // % offset inside the box
   imgY?: number;
+  // ── Per-element effects (each element keeps its own copy) ──
+  shadowOn?: boolean;
+  shadowType?: "outer" | "inner";
+  shadowColor?: string;
+  shadowBlur?: number;   // px
+  shadowX?: number;      // px offset
+  shadowY?: number;      // px offset
+  gradOn?: boolean;
+  gradColor1?: string;
+  gradColor2?: string;
+  gradAngle?: number;    // deg
+  gradIntensity?: number; // 0-100, where color1 stops
 };
+
+// Build CSS for an element's own shadow (text vs box differ)
+export function shadowCss(el: FrameElement): { boxShadow?: string; textShadow?: string } {
+  if (!el.shadowOn) return {};
+  const color = el.shadowColor ?? "#000000";
+  const blur = el.shadowBlur ?? 10;
+  const x = el.shadowX ?? 0;
+  const y = el.shadowY ?? 4;
+  if (el.type === "text") {
+    // Text can't do inset — inner is faked with a tight dark shadow
+    return { textShadow: el.shadowType === "inner" ? `0 1px 1px ${color}` : `${x}px ${y}px ${blur}px ${color}` };
+  }
+  return { boxShadow: `${el.shadowType === "inner" ? "inset " : ""}${x}px ${y}px ${blur}px ${color}` };
+}
+
+// Build CSS gradient for an element
+export function gradientCss(el: FrameElement): string | null {
+  if (!el.gradOn) return null;
+  const c1 = el.gradColor1 ?? "#f97316";
+  const c2 = el.gradColor2 ?? "#ffffff";
+  const angle = el.gradAngle ?? 135;
+  const stop = Math.max(0, Math.min(100, el.gradIntensity ?? 50));
+  return `linear-gradient(${angle}deg, ${c1} ${stop}%, ${c2} 100%)`;
+}
 
 // url = Google Fonts stylesheet; dataUrl = uploaded font file (.ttf/.otf/.woff)
 export type CustomFont = { label: string; family: string; url?: string; dataUrl?: string };
@@ -398,7 +434,10 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
       zIndex: el.z,
       borderRadius,
       touchAction: "none",
+      // element's own shadow (boxes only; text shadow applied on the span)
+      ...(el.type !== "text" ? shadowCss(el) : {}),
     };
+    const grad = gradientCss(el);
     return (
       <div
         key={el.id}
@@ -411,6 +450,7 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
             <div style={{ borderRadius }} className="w-full h-full overflow-hidden relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={el.defaultImage} alt={el.label} draggable={false} style={{ transform: `translate(${el.imgX ?? 0}%, ${el.imgY ?? 0}%) scale(${el.imgScale ?? 1})` }} className="w-full h-full object-cover" />
+              {grad && <div style={{ background: grad, borderRadius }} className="absolute inset-0 pointer-events-none mix-blend-overlay" />}
               {isSel && (
                 <>
                   <div
@@ -435,14 +475,23 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
         )}
         {el.type === "text" && (
           <div
-            style={{ fontFamily: el.fontFamily, fontSize: `${el.fontSize}px`, fontWeight: el.fontWeight as React.CSSProperties["fontWeight"], color: el.color, textAlign: el.align, borderRadius }}
+            style={{ fontFamily: el.fontFamily, fontSize: `${el.fontSize}px`, fontWeight: el.fontWeight as React.CSSProperties["fontWeight"], color: grad ? undefined : el.color, textAlign: el.align, borderRadius }}
             className="w-full h-full bg-white/60 flex items-center overflow-hidden px-1"
           >
-            <span className="w-full leading-tight" style={{ textAlign: el.align }}>{el.text}</span>
+            <span
+              className="w-full leading-tight"
+              style={{
+                textAlign: el.align,
+                ...shadowCss(el),
+                ...(grad ? { backgroundImage: grad, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" } : {}),
+              }}
+            >
+              {el.text}
+            </span>
           </div>
         )}
         {el.type === "frame" && (
-          <div style={{ background: el.fill, borderRadius }} className="w-full h-full" />
+          <div style={{ background: grad ?? el.fill, borderRadius }} className="w-full h-full" />
         )}
         {/* Resize handle */}
         {isSel && (
@@ -636,6 +685,99 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
                   <button onClick={() => moveLayer(1)} className="flex-1 flex items-center justify-center gap-1 border border-gray-200 rounded-lg py-1.5 hover:bg-gray-50"><ChevronUp className="w-3 h-3" /> Upar</button>
                   <button onClick={() => moveLayer(-1)} className="flex-1 flex items-center justify-center gap-1 border border-gray-200 rounded-lg py-1.5 hover:bg-gray-50"><ChevronDown className="w-3 h-3" /> Niche</button>
                 </div>
+              </div>
+
+              {/* ── Shadow (per-element) ── */}
+              <div className="border-t border-gray-100 pt-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selected.shadowOn ?? false}
+                    onChange={(e) => updateSelected({
+                      shadowOn: e.target.checked,
+                      ...(e.target.checked && selected.shadowColor === undefined
+                        ? { shadowType: "outer" as const, shadowColor: "#000000", shadowBlur: 10, shadowX: 0, shadowY: 4 }
+                        : {}),
+                    })}
+                    className="w-3.5 h-3.5 accent-orange-500"
+                  />
+                  <span className="font-bold text-gray-800">🌑 Shadow</span>
+                </label>
+                {selected.shadowOn && (
+                  <div className="mt-2 space-y-2 pl-5">
+                    <div className="flex gap-1.5">
+                      {(["outer", "inner"] as const).map((t) => (
+                        <button
+                          key={t}
+                          onClick={() => updateSelected({ shadowType: t })}
+                          className={`flex-1 py-1.5 rounded-lg capitalize ${(selected.shadowType ?? "outer") === t ? "bg-orange-500 text-white font-semibold" : "bg-gray-100 text-gray-600"}`}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500 w-12 shrink-0">Color</span>
+                      <input type="color" value={selected.shadowColor ?? "#000000"} onChange={(e) => updateSelected({ shadowColor: e.target.value })} className="w-8 h-7 rounded border border-gray-200 cursor-pointer p-0" />
+                      <input className={inputClass + " flex-1 font-mono"} value={selected.shadowColor ?? "#000000"} onChange={(e) => updateSelected({ shadowColor: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="block text-gray-500 mb-0.5">Size / Blur: {selected.shadowBlur ?? 10}px</label>
+                      <input type="range" min={0} max={60} value={selected.shadowBlur ?? 10} onChange={(e) => updateSelected({ shadowBlur: Number(e.target.value) })} className="w-full accent-orange-500" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-gray-500 mb-0.5">Offset X</label>
+                        <input type="number" className={inputClass} value={selected.shadowX ?? 0} onChange={(e) => updateSelected({ shadowX: Number(e.target.value) })} />
+                      </div>
+                      <div>
+                        <label className="block text-gray-500 mb-0.5">Offset Y</label>
+                        <input type="number" className={inputClass} value={selected.shadowY ?? 4} onChange={(e) => updateSelected({ shadowY: Number(e.target.value) })} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Gradient (per-element, admin only) ── */}
+              <div className="border-t border-gray-100 pt-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selected.gradOn ?? false}
+                    onChange={(e) => updateSelected({
+                      gradOn: e.target.checked,
+                      ...(e.target.checked && selected.gradColor1 === undefined
+                        ? { gradColor1: "#d4af37", gradColor2: "#ffffff", gradAngle: 135, gradIntensity: 50 }
+                        : {}),
+                    })}
+                    className="w-3.5 h-3.5 accent-orange-500"
+                  />
+                  <span className="font-bold text-gray-800">🎨 Gradient</span>
+                </label>
+                {selected.gradOn && (
+                  <div className="mt-2 space-y-2 pl-5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500 w-12 shrink-0">Color 1</span>
+                      <input type="color" value={selected.gradColor1 ?? "#d4af37"} onChange={(e) => updateSelected({ gradColor1: e.target.value })} className="w-8 h-7 rounded border border-gray-200 cursor-pointer p-0" />
+                      <input className={inputClass + " flex-1 font-mono"} value={selected.gradColor1 ?? "#d4af37"} onChange={(e) => updateSelected({ gradColor1: e.target.value })} />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500 w-12 shrink-0">Color 2</span>
+                      <input type="color" value={selected.gradColor2 ?? "#ffffff"} onChange={(e) => updateSelected({ gradColor2: e.target.value })} className="w-8 h-7 rounded border border-gray-200 cursor-pointer p-0" />
+                      <input className={inputClass + " flex-1 font-mono"} value={selected.gradColor2 ?? "#ffffff"} onChange={(e) => updateSelected({ gradColor2: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="block text-gray-500 mb-0.5">Direction: {selected.gradAngle ?? 135}°</label>
+                      <input type="range" min={0} max={360} value={selected.gradAngle ?? 135} onChange={(e) => updateSelected({ gradAngle: Number(e.target.value) })} className="w-full accent-orange-500" />
+                    </div>
+                    <div>
+                      <label className="block text-gray-500 mb-0.5">Intensity: {selected.gradIntensity ?? 50}%</label>
+                      <input type="range" min={0} max={100} value={selected.gradIntensity ?? 50} onChange={(e) => updateSelected({ gradIntensity: Number(e.target.value) })} className="w-full accent-orange-500" />
+                    </div>
+                    <div style={{ background: gradientCss(selected) ?? undefined }} className="h-6 rounded-lg" />
+                  </div>
+                )}
               </div>
 
               {/* Image box props */}

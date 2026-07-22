@@ -22,7 +22,41 @@ type FrameElement = {
   imgScale?: number;
   imgX?: number;
   imgY?: number;
+  // Per-element effects set by admin in Frame Designer
+  shadowOn?: boolean;
+  shadowType?: "outer" | "inner";
+  shadowColor?: string;
+  shadowBlur?: number;
+  shadowX?: number;
+  shadowY?: number;
+  gradOn?: boolean;
+  gradColor1?: string;
+  gradColor2?: string;
+  gradAngle?: number;
+  gradIntensity?: number;
 };
+
+// Same effect math as the admin designer so preview matches exactly
+function shadowCss(el: FrameElement): { boxShadow?: string; textShadow?: string } {
+  if (!el.shadowOn) return {};
+  const color = el.shadowColor ?? "#000000";
+  const blur = el.shadowBlur ?? 10;
+  const x = el.shadowX ?? 0;
+  const y = el.shadowY ?? 4;
+  if (el.type === "text") {
+    return { textShadow: el.shadowType === "inner" ? `0 1px 1px ${color}` : `${x}px ${y}px ${blur}px ${color}` };
+  }
+  return { boxShadow: `${el.shadowType === "inner" ? "inset " : ""}${x}px ${y}px ${blur}px ${color}` };
+}
+
+function gradientCss(el: FrameElement): string | null {
+  if (!el.gradOn) return null;
+  const c1 = el.gradColor1 ?? "#f97316";
+  const c2 = el.gradColor2 ?? "#ffffff";
+  const angle = el.gradAngle ?? 135;
+  const stop = Math.max(0, Math.min(100, el.gradIntensity ?? 50));
+  return `linear-gradient(${angle}deg, ${c1} ${stop}%, ${c2} 100%)`;
+}
 
 type CustomerOptions = {
   frameColors: { allowed: string[]; default: string };
@@ -219,9 +253,12 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
       position: "absolute",
       left: `${el.x}%`, top: `${el.y}%`, width: `${el.w}%`, height: `${el.h}%`,
       transform: `rotate(${el.rotation}deg)`, zIndex: el.z, borderRadius,
+      ...(el.type !== "text" ? shadowCss(el) : {}),
     };
+    const grad = gradientCss(el);
     if (el.type === "frame") {
-      return <div key={el.id} style={{ ...style, background: frameColor ?? el.fill }} />;
+      // Customer's frame colour wins over the admin gradient when chosen
+      return <div key={el.id} style={{ ...style, background: frameColor ?? grad ?? el.fill }} />;
     }
     if (el.type === "image") {
       const img = overrides[el.id]?.image ?? el.defaultImage;
@@ -239,6 +276,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
             <div style={{ borderRadius }} className="w-full h-full overflow-hidden relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={img} alt={el.label} draggable={false} style={{ transform: `translate(${offX}%, ${offY}%) scale(${scale})` }} className="w-full h-full object-cover" />
+              {grad && <div style={{ background: grad, borderRadius }} className="absolute inset-0 pointer-events-none mix-blend-overlay" />}
               {customizing && (
                 <>
                   <div
@@ -269,7 +307,8 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
     }
     // text — mirror finish overrides plain color with a metallic gradient
     const content = overrides[el.id]?.text ?? el.text;
-    const mirrorGradient = mirrorFinish ? MIRROR_FINISHES[mirrorFinish] : null;
+    // Customer's mirror finish wins; otherwise admin's per-element gradient
+    const mirrorGradient = mirrorFinish ? MIRROR_FINISHES[mirrorFinish] : grad;
     return (
       <div
         key={el.id}
@@ -293,9 +332,13 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                   WebkitBackgroundClip: "text",
                   backgroundClip: "text",
                   color: "transparent",
-                  filter: "drop-shadow(0 2px 2px rgba(0,0,0,.35))",
+                  filter: mirrorFinish
+                    ? "drop-shadow(0 2px 2px rgba(0,0,0,.35))"
+                    : el.shadowOn
+                      ? `drop-shadow(${el.shadowX ?? 0}px ${el.shadowY ?? 4}px ${el.shadowBlur ?? 10}px ${el.shadowColor ?? "#000"})`
+                      : undefined,
                 }
-              : { textAlign: el.align }
+              : { textAlign: el.align, ...shadowCss(el) }
           }
         >
           {content}
