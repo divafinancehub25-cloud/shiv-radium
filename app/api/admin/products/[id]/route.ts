@@ -9,11 +9,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const body = await req.json();
     const { name, slug, description, basePrice, categoryId, deliveryDays, isActive, isFeatured, images, fields, previewPosition, features, sampleDesigns } = body;
 
+    // ── Slug guard: never let repeated edits break the product URL (404 fix) ──
+    const current = await db.product.findUnique({ where: { id }, select: { slug: true } });
+    let safeSlug = (slug ?? "").toString().trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    if (!safeSlug) safeSlug = current?.slug || `product-${id.slice(-6)}`;
+    if (safeSlug !== current?.slug) {
+      // ensure uniqueness — append a suffix if another product already uses it
+      const clash = await db.product.findFirst({ where: { slug: safeSlug, NOT: { id } }, select: { id: true } });
+      if (clash) safeSlug = `${safeSlug}-${id.slice(-4)}`;
+    }
+
     await db.product.update({
       where: { id },
       data: {
         name,
-        slug,
+        slug: safeSlug,
         description,
         basePrice: parseFloat(basePrice),
         categoryId,
@@ -80,7 +90,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, slug: safeSlug });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }

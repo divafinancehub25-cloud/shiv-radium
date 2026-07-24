@@ -20,20 +20,22 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
 
-  const product = await db.product.findUnique({
-    where: { slug, isActive: true },
-    include: {
-      category: { select: { name: true, slug: true, icon: true } },
-      fields: {
-        orderBy: { sortOrder: "asc" },
-        include: { options: { orderBy: { sortOrder: "asc" } } },
-      },
-      frameTemplates: {
-        where: { isActive: true },
-        orderBy: { createdAt: "asc" },
-      },
+  // Resilient lookup: match by slug OR by id (so a changed slug / old link
+  // never 404s), and don't hard-require isActive here.
+  const include = {
+    category: { select: { name: true, slug: true, icon: true } },
+    fields: {
+      orderBy: { sortOrder: "asc" as const },
+      include: { options: { orderBy: { sortOrder: "asc" as const } } },
     },
-  });
+    frameTemplates: {
+      where: { isActive: true },
+      orderBy: { createdAt: "asc" as const },
+    },
+  };
+  const product =
+    (await db.product.findFirst({ where: { slug, isActive: true }, include })) ??
+    (await db.product.findFirst({ where: { OR: [{ slug }, { id: slug }] }, include }));
 
   if (!product) notFound();
 

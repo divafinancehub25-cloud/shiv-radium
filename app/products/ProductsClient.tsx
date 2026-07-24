@@ -32,26 +32,9 @@ export default function ProductsClient({ products, categories }: { products: Pro
 
   return (
     <>
-      {/* Search + Filter */}
-      <div className="flex flex-col md:flex-row gap-3 mb-8">
+      {/* Search only — category chips removed (now in the ⋮ Category menu) */}
+      <div className="mb-8">
         <SearchBar onSearch={setSearch} />
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setSelectedCat("")}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${!selectedCat ? "bg-orange-500 text-white" : "border border-gray-200 text-gray-600 hover:border-orange-400"}`}
-          >
-            All
-          </button>
-          {categories.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setSelectedCat(selectedCat === c.slug ? "" : c.slug)}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${selectedCat === c.slug ? "bg-orange-500 text-white" : "border border-gray-200 text-gray-600 hover:border-orange-400"}`}
-            >
-              {c.icon} {c.name}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Results count */}

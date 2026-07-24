@@ -52,25 +52,35 @@ export default function CropModal({
     setProcessing(true);
     // Image is rendered with object-cover semantics: base scale fills the box
     const natW = img.naturalWidth, natH = img.naturalHeight;
-    const baseScale = Math.max(boxW / natW, boxH / natH);
-    const scale = baseScale * zoom;
-    const dispW = natW * scale, dispH = natH * scale;
-    // Top-left of image in box coords (image centered + pos offset)
-    const left = boxW / 2 - dispW / 2 + pos.x;
-    const top = boxH / 2 - dispH / 2 + pos.y;
-    // Source rect in natural pixels
-    const sx = Math.max(0, -left / scale);
-    const sy = Math.max(0, -top / scale);
-    const sw = Math.min(natW - sx, boxW / scale);
-    const sh = Math.min(natH - sy, boxH / scale);
+    // Mirror the on-screen preview EXACTLY: object-cover into the box, then
+    // scale(zoom) around box center, then pan by pos. Draw into destination
+    // coords (like the DOM) so aspect ratio is never distorted and position
+    // stays accurate; empty area (if any) is filled white.
+    const cover = Math.max(boxW / natW, boxH / natH);
+    const displayScale = cover * zoom;
+    const contentW = natW * displayScale;
+    const contentH = natH * displayScale;
+    const contentLeft = boxW / 2 + pos.x - contentW / 2;
+    const contentTop = boxH / 2 + pos.y - contentH / 2;
 
-    const outW = Math.min(1200, Math.round(sw));
-    const outH = Math.round(outW * (sh / sw));
+    // Output canvas keeps the BOX aspect ratio (no stretch), upscaled for print
+    const outW = Math.round(Math.min(1400, Math.max(boxW * 2, boxW)));
+    const outScale = outW / boxW;
+    const outH = Math.round(boxH * outScale);
     const canvas = document.createElement("canvas");
     canvas.width = outW;
     canvas.height = outH;
     const ctx = canvas.getContext("2d")!;
-    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, outW, outH);
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(
+      img,
+      contentLeft * outScale,
+      contentTop * outScale,
+      contentW * outScale,
+      contentH * outScale
+    );
     canvas.toBlob((blob) => {
       setProcessing(false);
       if (!blob) return;
@@ -89,7 +99,7 @@ export default function CropModal({
           onPointerMove={onMove}
           onPointerUp={endDrag}
           onPointerLeave={endDrag}
-          className="relative mx-auto overflow-hidden rounded-xl border-2 border-orange-400 bg-gray-100 touch-none"
+          className="relative mx-auto overflow-hidden rounded-xl bg-gray-100 touch-none"
           style={{ width: boxW, height: boxH }}
         >
           {imgUrl && (

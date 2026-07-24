@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Plus, Trash2, Save, Image as ImageIcon, Type, Square, Circle, ZoomIn, ZoomOut, ChevronUp, ChevronDown, Copy } from "lucide-react";
+import { Plus, Trash2, Save, Image as ImageIcon, Type, Square, Circle, ChevronUp, ChevronDown, Copy } from "lucide-react";
 import CropModal from "@/components/CropModal";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -117,7 +117,7 @@ function defaultOptions(): CustomerOptions {
     fonts: { allowed: ["Arial, sans-serif", "'Playfair Display', serif", "'Dancing Script', cursive"], default: "Arial, sans-serif" },
     textSizes: { allowed: TEXT_SIZE_PRESETS.slice(0, 3), default: 24 },
     customFonts: [],
-    bgAspect: 1,
+    bgAspect: 4 / 3,
     acrylicMirror: { enabled: false, allowed: ACRYLIC_MIRROR_COLORS.map((c) => c.label), default: "Normal Gold" },
   };
 }
@@ -197,7 +197,6 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
   const [templateName, setTemplateName] = useState("");
   const [bgImage, setBgImage] = useState<string | null>(productImage);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const [options, setOptions] = useState<CustomerOptions>(defaultOptions());
@@ -456,12 +455,12 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
                   <div
                     onPointerDown={(e) => startDrag(el.id, "imgscale", e)}
                     title="Image zoom — drag karo"
-                    className="absolute bottom-1 right-1 w-4 h-4 bg-blue-500 border-2 border-white rounded-full cursor-ew-resize shadow"
+                    className="absolute bottom-1 right-1 w-2.5 h-2.5 bg-blue-500 border border-white rounded-full cursor-ew-resize shadow"
                   />
                   <div
                     onPointerDown={(e) => startDrag(el.id, "imgpan", e)}
                     title="Image adjust — up/down/left/right drag karo"
-                    className="absolute bottom-1 left-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full cursor-move shadow"
+                    className="absolute bottom-1 left-1 w-2.5 h-2.5 bg-green-500 border border-white rounded-full cursor-move shadow"
                   />
                 </>
               )}
@@ -476,7 +475,7 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
         {el.type === "text" && (
           <div
             style={{ fontFamily: el.fontFamily, fontSize: `${el.fontSize}px`, fontWeight: el.fontWeight as React.CSSProperties["fontWeight"], color: grad ? undefined : el.color, textAlign: el.align, borderRadius }}
-            className="w-full h-full bg-white/60 flex items-center overflow-hidden px-1"
+            className="w-full h-full flex items-center overflow-hidden px-1"
           >
             <span
               className="w-full leading-tight"
@@ -586,13 +585,6 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
             </div>
           </div>
 
-          {/* Zoom */}
-          <div className="flex items-center gap-2">
-            <button onClick={() => setZoom((z) => Math.max(0.4, num(z - 0.15)))} className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50"><ZoomOut className="w-4 h-4" /></button>
-            <span className="text-xs font-semibold text-gray-600 flex-1 text-center">{Math.round(zoom * 100)}%</span>
-            <button onClick={() => setZoom((z) => Math.min(2, num(z + 0.15)))} className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50"><ZoomIn className="w-4 h-4" /></button>
-          </div>
-
           {/* Background image */}
           <div className="border border-gray-200 rounded-xl p-3 space-y-2">
             <p className="text-[10px] font-semibold text-gray-500">Background Image</p>
@@ -636,8 +628,9 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
             onPointerDown={() => setSelectedId(null)}
             className="relative bg-white shadow-lg shrink-0 overflow-hidden"
             style={{
-              width: 420 * zoom,
-              height: (420 / (options.bgAspect || 1)) * zoom,
+              width: 440,
+              // 4:3 default when no bg uploaded; otherwise the bg image's own ratio
+              height: 440 / (options.bgAspect || 4 / 3),
               backgroundImage: bgImage ? `url(${bgImage})` : "repeating-conic-gradient(#f3f4f6 0% 25%, #ffffff 0% 50%)",
               backgroundSize: bgImage ? "100% 100%" : "24px 24px",
               backgroundPosition: "center",
