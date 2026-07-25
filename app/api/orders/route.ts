@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
       address, city, state, pinCode,
       giftWrapping, giftMessage, deliveryDate,
       items, subtotal, shippingCharge, giftWrapCharge,
+      gstNumber, gstRate,
     } = body;
 
     if (!customerName || !customerPhone || !address || !city || !state || !pinCode) {
@@ -34,7 +35,9 @@ export async function POST(req: NextRequest) {
     }
 
     const orderNumber = generateOrderNumber();
-    const finalTotal = Number(subtotal) + Number(shippingCharge) + Number(giftWrapCharge ?? 0);
+    const rate = gstRate ? parseFloat(gstRate) : 0;
+    const gstAmount = rate > 0 ? Number((Number(subtotal) * rate / 100).toFixed(2)) : 0;
+    const finalTotal = Number(subtotal) + Number(shippingCharge) + Number(giftWrapCharge ?? 0) + gstAmount;
 
     // Step 1: create order without items
     const order = await db.order.create({
@@ -53,6 +56,9 @@ export async function POST(req: NextRequest) {
         giftWrapping: giftWrapping ?? false,
         giftMessage: giftMessage || null,
         deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
+        gstNumber: gstNumber || null,
+        gstRate: rate || null,
+        gstAmount: gstAmount || null,
       },
     });
 
@@ -72,10 +78,40 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Step 3: create a Razorpay order (online payment). If keys are missing,
+    // fall back to a plain order (COD) so checkout never breaks.
+    let razorpayOrderId: string | null = null;
+    const keyId = process.env.RAZORPAY_KEY_ID;
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    if (keyId && keySecret) {
+      try {
+        const auth = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
+        const rzpRes = await fetch("https://api.razorpay.com/v1/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Basic ${auth}` },
+          body: JSON.stringify({
+            amount: Math.round(finalTotal * 100), // paise
+            currency: "INR",
+            receipt: orderNumber,
+            notes: { orderId: order.id, orderNumber },
+          }),
+        });
+        const rzpData = await rzpRes.json();
+        if (rzpRes.ok && rzpData.id) {
+          razorpayOrderId = rzpData.id;
+          await db.order.update({ where: { id: order.id }, data: { razorpayOrderId } });
+        } else {
+          console.error("Razorpay order failed:", rzpData);
+        }
+      } catch (e) {
+        console.error("Razorpay error:", e);
+      }
+    }
+
     return NextResponse.json({
       orderId: order.id,
       orderNumber: order.orderNumber,
-      razorpayOrderId: null,
+      razorpayOrderId,
     });
   } catch (err) {
     console.error("Order error:", err);

@@ -34,6 +34,8 @@ export default function CheckoutPage() {
     giftWrapping: false,
     giftMessage: "",
     deliveryDate: "",
+    hasGst: false,
+    gstNumber: "",
   });
 
   useEffect(() => {
@@ -76,6 +78,7 @@ export default function CheckoutPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          gstNumber: form.hasGst ? form.gstNumber : "",
           items: cart,
           subtotal,
           shippingCharge: shipping,
@@ -122,15 +125,31 @@ export default function CheckoutPage() {
         contact: form.customerPhone,
       },
       theme: { color: "#f97316" },
+      modal: {
+        ondismiss: () => {
+          // Customer closed the payment window — order stays PENDING
+          setLoading(false);
+          alert("Payment cancel ho gaya. Aapka order pending hai — dobara try kar sakte ho.");
+        },
+      },
       handler: async (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
-        await fetch("/api/orders/verify-payment", {
+        const vr = await fetch("/api/orders/verify-payment", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ orderId, ...response }),
         });
+        const vd = await vr.json().catch(() => ({}));
+        if (!vr.ok || !vd.verified) {
+          alert("Payment verify nahi hua. Agar paise kate hain to hum se contact karo.");
+          return;
+        }
         localStorage.removeItem("cart");
         router.push(`/order-success?id=${orderId}&number=${orderNumber}`);
       },
+    }) as { open(): void; on(ev: string, cb: (r: unknown) => void): void };
+    rzp.on("payment.failed", () => {
+      setLoading(false);
+      alert("Payment fail ho gaya. Dobara try karo ya doosra method use karo.");
     });
     rzp.open();
   }
@@ -252,6 +271,32 @@ export default function CheckoutPage() {
                   value={form.giftMessage}
                   onChange={(e) => set("giftMessage", e.target.value)}
                 />
+              )}
+            </div>
+
+            {/* GST — optional */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-6">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.hasGst}
+                  onChange={(e) => set("hasGst", e.target.checked)}
+                  className="w-4 h-4 accent-orange-500"
+                />
+                <span className="text-sm font-medium text-gray-700">Do you have a GST number? <span className="text-gray-400">(optional — business invoice ke liye)</span></span>
+              </label>
+              {form.hasGst && (
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">GSTIN</label>
+                  <input
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 font-mono"
+                    placeholder="22AAAAA0000A1Z5"
+                    maxLength={15}
+                    value={form.gstNumber}
+                    onChange={(e) => set("gstNumber", e.target.value.toUpperCase())}
+                  />
+                  <p className="text-xs text-gray-400 mt-1.5">Aapka GSTIN invoice pe show hoga. GST breakdown seller add karega (agar applicable ho).</p>
+                </div>
               )}
             </div>
           </div>
