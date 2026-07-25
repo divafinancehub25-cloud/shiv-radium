@@ -12,18 +12,26 @@ export default function OrderStatusUpdater({
   currentPayment,
   currentCourier = "",
   currentTracking = "",
+  currentGstNumber = "",
+  currentGstRate = "",
+  orderNumber,
 }: {
   orderId: string;
   currentStatus: string;
   currentPayment: string;
   currentCourier?: string;
   currentTracking?: string;
+  currentGstNumber?: string;
+  currentGstRate?: string;
+  orderNumber?: string;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState(currentStatus);
   const [payment, setPayment] = useState(currentPayment);
   const [courier, setCourier] = useState(currentCourier);
   const [tracking, setTracking] = useState(currentTracking);
+  const [gstNumber, setGstNumber] = useState(currentGstNumber);
+  const [gstRate, setGstRate] = useState(currentGstRate);
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -31,13 +39,13 @@ export default function OrderStatusUpdater({
     await fetch(`/api/admin/orders/${orderId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, paymentStatus: payment, courierName: courier, trackingNumber: tracking }),
+      body: JSON.stringify({ status, paymentStatus: payment, courierName: courier, trackingNumber: tracking, gstNumber, gstRate }),
     });
     setSaving(false);
     router.refresh();
   }
 
-  const changed = status !== currentStatus || payment !== currentPayment || courier !== currentCourier || tracking !== currentTracking;
+  const changed = status !== currentStatus || payment !== currentPayment || courier !== currentCourier || tracking !== currentTracking || gstNumber !== currentGstNumber || gstRate !== currentGstRate;
 
   return (
     <div className="flex flex-col gap-2 items-end">
@@ -71,15 +79,42 @@ export default function OrderStatusUpdater({
           className="border border-gray-200 rounded-xl px-3 py-2 text-sm w-40 focus:outline-none focus:ring-2 focus:ring-orange-400"
         />
       </div>
-      {changed && (
-        <button
-          onClick={save}
-          disabled={saving}
-          className="bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors"
-        >
-          {saving ? "Saving..." : "Save Changes"}
-        </button>
-      )}
+      {/* Optional GST — admin manually adds number + rate when customer needs it */}
+      <div className="flex items-center gap-2">
+        <input
+          value={gstNumber}
+          onChange={(e) => setGstNumber(e.target.value.toUpperCase())}
+          placeholder="Customer GSTIN (optional)"
+          className="border border-gray-200 rounded-xl px-3 py-2 text-sm w-44 focus:outline-none focus:ring-2 focus:ring-orange-400"
+        />
+        <input
+          value={gstRate}
+          onChange={(e) => setGstRate(e.target.value.replace(/[^0-9.]/g, ""))}
+          placeholder="GST %"
+          className="border border-gray-200 rounded-xl px-3 py-2 text-sm w-20 focus:outline-none focus:ring-2 focus:ring-orange-400"
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        {orderNumber && (
+          <a
+            href={`/invoice/${orderNumber}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium px-4 py-2 rounded-xl transition-colors"
+          >
+            🧾 Invoice
+          </a>
+        )}
+        {changed && (
+          <button
+            onClick={save}
+            disabled={saving}
+            className="bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors"
+          >
+            {saving ? "Saving..." : "Save Changes"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

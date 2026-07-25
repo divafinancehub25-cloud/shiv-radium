@@ -58,6 +58,8 @@ export default function SettingsForm({ settings, razorpaySet }: { settings: Reco
     store_phone: settings.store_phone ?? "",
     store_email: settings.store_email ?? "",
     store_logo: settings.store_logo ?? "",
+    store_address: settings.store_address ?? "",
+    seller_gstin: settings.seller_gstin ?? "",
     shipping_free_above: settings.shipping_free_above ?? "999",
     shipping_charge: settings.shipping_charge ?? "99",
     gift_wrapping_enabled: settings.gift_wrapping_enabled ?? "true",
@@ -168,6 +170,14 @@ export default function SettingsForm({ settings, razorpaySet }: { settings: Reco
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Contact Email</label>
             <input className={inputClass} placeholder="orders@shivradium.com" value={form.store_email} onChange={(e) => set("store_email", e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Business Address <span className="text-gray-400 text-xs">(invoice pe dikhega)</span></label>
+            <textarea className={inputClass + " resize-none"} rows={2} placeholder="Shop no, Street, City, State - PIN" value={form.store_address} onChange={(e) => set("store_address", e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Seller GSTIN <span className="text-gray-400 text-xs">(optional — invoice pe)</span></label>
+            <input className={inputClass} placeholder="22AAAAA0000A1Z5" value={form.seller_gstin} onChange={(e) => set("seller_gstin", e.target.value.toUpperCase())} />
           </div>
         </div>
       </div>

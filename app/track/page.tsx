@@ -182,6 +182,16 @@ export default function TrackOrderPage() {
               </div>
             </div>
 
+            {/* Download invoice */}
+            <a
+              href={`/invoice/${order.orderNumber}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 bg-gray-900 hover:bg-black text-white font-semibold py-3 rounded-2xl transition-colors"
+            >
+              🧾 Download Invoice
+            </a>
+
             {/* Shipment tracking */}
             {order.trackingNumber && (
               <div className="bg-cyan-50 border border-cyan-100 rounded-2xl p-6">

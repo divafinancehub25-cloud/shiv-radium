@@ -29,7 +29,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
             Placed on {new Date(order.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}
           </p>
         </div>
-        <OrderStatusUpdater orderId={order.id} currentStatus={order.status} currentPayment={order.paymentStatus} currentCourier={order.courierName ?? ""} currentTracking={order.trackingNumber ?? ""} />
+        <OrderStatusUpdater orderId={order.id} currentStatus={order.status} currentPayment={order.paymentStatus} currentCourier={order.courierName ?? ""} currentTracking={order.trackingNumber ?? ""} currentGstNumber={order.gstNumber ?? ""} currentGstRate={order.gstRate?.toString() ?? ""} orderNumber={order.orderNumber} />
       </div>
 
       <div className="grid md:grid-cols-3 gap-5">

@@ -298,6 +298,9 @@ model Order {
   razorpayPaymentId String?
   courierName   String?
   trackingNumber String?
+  gstNumber     String?
+  gstRate       Float?
+  gstAmount     Decimal?      @db.Decimal(10, 2)
   giftWrapping  Boolean       @default(false)
   giftMessage   String?
   deliveryDate  DateTime?

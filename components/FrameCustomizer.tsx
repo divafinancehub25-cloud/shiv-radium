@@ -80,6 +80,45 @@ const MIRROR_FINISHES: Record<string, string> = {
 };
 const MIRROR_TEXT_SHADOW = "0 1px 0 rgba(255,255,255,.6), 0 2px 2px rgba(0,0,0,.35), 0 4px 6px rgba(0,0,0,.3)";
 
+// Detect the dominant colour of an image (downscaled average of bright pixels)
+function dominantColor(url: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const c = document.createElement("canvas");
+        const s = 40;
+        c.width = s; c.height = s;
+        const ctx = c.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, s, s);
+        const data = ctx.getImageData(0, 0, s, s).data;
+        let r = 0, g = 0, b = 0, n = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          const a = data[i + 3];
+          if (a < 125) continue;
+          const br = (data[i] + data[i + 1] + data[i + 2]) / 3;
+          if (br < 20 || br > 240) continue; // skip near-black/near-white
+          r += data[i]; g += data[i + 1]; b += data[i + 2]; n++;
+        }
+        if (n === 0) { resolve("#d4af37"); return; }
+        const hex = (v: number) => Math.round(v / n).toString(16).padStart(2, "0");
+        resolve(`#${hex(r)}${hex(g)}${hex(b)}`);
+      } catch { resolve("#d4af37"); }
+    };
+    img.onerror = () => resolve("#d4af37");
+    img.src = url;
+  });
+}
+
+// Lighten a hex colour toward white (for gradient colour 2)
+function lighten(hex: string, amt = 0.55): string {
+  const m = hex.replace("#", "");
+  const r = parseInt(m.slice(0, 2), 16), g = parseInt(m.slice(2, 4), 16), b = parseInt(m.slice(4, 6), 16);
+  const mix = (v: number) => Math.round(v + (255 - v) * amt).toString(16).padStart(2, "0");
+  return `#${mix(r)}${mix(g)}${mix(b)}`;
+}
+
 type Template = {
   id: string;
   name: string;
@@ -131,6 +170,24 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
   // Step-by-step customize drawer: 1 = Text/Photo, 2 = Color & Size
   const [step, setStep] = useState(1);
   const [mirrorFinish, setMirrorFinish] = useState<string | null>(null);
+  // Customer gradient (simple Light ON/OFF) + apply to all images + auto-colour
+  const [custGrad, setCustGrad] = useState<{ on: boolean; c1: string; c2: string; angle: number }>({ on: false, c1: "#d4af37", c2: "#f7e28f", angle: 135 });
+  const [gradAllImages, setGradAllImages] = useState(false);
+  const [genBusy, setGenBusy] = useState(false);
+
+  const custGradCss = `linear-gradient(${custGrad.angle}deg, ${custGrad.c1} 0%, ${custGrad.c2} 100%)`;
+
+  // Auto-generate gradient colours from the first available image on the design
+  async function generateFromImage() {
+    setGenBusy(true);
+    const firstImg = imageBoxes.map((el) => overrides[el.id]?.image ?? el.defaultImage).find(Boolean);
+    const src = firstImg ?? product.images?.[0];
+    if (src) {
+      const dom = await dominantColor(src);
+      setCustGrad((g) => ({ ...g, on: true, c1: dom, c2: lighten(dom) }));
+    }
+    setGenBusy(false);
+  }
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const canvasRef = useRef<HTMLDivElement>(null);
   const scaleDragRef = useRef<{ elId: string; mode: "scale" | "pan"; startX: number; startY: number; origScale: number; origX: number; origY: number; elW: number; elH: number } | null>(null);
@@ -227,6 +284,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
       if (font) customizationData["Font Style"] = FONT_LABELS[font] ?? font;
       if (textSize) customizationData["Text Size"] = `${textSize}px`;
       if (mirrorFinish) customizationData["Acrylic Mirror Finish"] = `${mirrorFinish} (4mm mirror, 3D raised)`;
+      if (custGrad.on) customizationData["Gradient"] = `${custGrad.c1} → ${custGrad.c2}${gradAllImages ? " (all photos)" : ""}`;
     }
     const existing = JSON.parse(localStorage.getItem("cart") ?? "[]");
     localStorage.setItem("cart", JSON.stringify([
@@ -255,7 +313,10 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
       transform: `rotate(${el.rotation}deg)`, zIndex: el.z, borderRadius,
       ...(el.type !== "text" ? shadowCss(el) : {}),
     };
-    const grad = gradientCss(el);
+    // Admin per-element gradient, plus optional customer gradient
+    const adminGrad = gradientCss(el);
+    const custImgGrad = custGrad.on && gradAllImages ? custGradCss : null;
+    const grad = adminGrad; // used for image overlay + text (admin)
     if (el.type === "frame") {
       // Customer's frame colour wins over the admin gradient when chosen
       return <div key={el.id} style={{ ...style, background: frameColor ?? grad ?? el.fill }} />;
@@ -276,7 +337,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
             <div style={{ borderRadius }} className="w-full h-full overflow-hidden relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={img} alt={el.label} draggable={false} style={{ transform: `translate(${offX}%, ${offY}%) scale(${scale})` }} className="w-full h-full object-cover" />
-              {grad && <div style={{ background: grad, borderRadius }} className="absolute inset-0 pointer-events-none mix-blend-overlay" />}
+              {(grad || custImgGrad) && <div style={{ background: custImgGrad ?? grad!, borderRadius }} className="absolute inset-0 pointer-events-none mix-blend-overlay" />}
               {customizing && (
                 <>
                   <div
@@ -308,7 +369,8 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
     // text — mirror finish overrides plain color with a metallic gradient
     const content = overrides[el.id]?.text ?? el.text;
     // Customer's mirror finish wins; otherwise admin's per-element gradient
-    const mirrorGradient = mirrorFinish ? MIRROR_FINISHES[mirrorFinish] : grad;
+    // Priority: mirror finish > customer gradient > admin gradient
+    const mirrorGradient = mirrorFinish ? MIRROR_FINISHES[mirrorFinish] : (custGrad.on ? custGradCss : grad);
     return (
       <div
         key={el.id}
@@ -681,6 +743,47 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                       )}
                     </div>
                   )}
+
+                  {/* Gradient — simple Light ON/OFF + apply to all + auto-colour */}
+                  <div className="bg-white rounded-2xl shadow-sm p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-800">🌈 Gradient Light</label>
+                        <p className="text-[11px] text-gray-400">Text/photo pe colourful gradient</p>
+                      </div>
+                      <button
+                        onClick={() => setCustGrad((g) => ({ ...g, on: !g.on }))}
+                        style={{ border: "none" }}
+                        className={`w-14 h-7 rounded-full transition-colors relative ${custGrad.on ? "bg-gray-900" : "bg-gray-200"}`}
+                      >
+                        <span className={`absolute top-1 w-5 h-5 rounded-full transition-all ${custGrad.on ? "left-8 bg-amber-300" : "left-1 bg-white"}`} />
+                      </button>
+                    </div>
+                    {custGrad.on && (
+                      <div className="mt-3 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-gray-500 shrink-0">Colors</span>
+                          <input type="color" value={custGrad.c1} onChange={(e) => setCustGrad((g) => ({ ...g, c1: e.target.value }))} className="w-9 h-8 rounded-lg cursor-pointer" style={{ border: "none" }} />
+                          <input type="color" value={custGrad.c2} onChange={(e) => setCustGrad((g) => ({ ...g, c2: e.target.value }))} className="w-9 h-8 rounded-lg cursor-pointer" style={{ border: "none" }} />
+                          <div className="flex-1 h-8 rounded-lg" style={{ background: custGradCss }} />
+                        </div>
+                        <button
+                          onClick={generateFromImage}
+                          disabled={genBusy}
+                          style={{ border: "none" }}
+                          className="w-full bg-gray-100 hover:bg-amber-50 text-gray-700 text-xs font-semibold py-2.5 rounded-xl disabled:opacity-60"
+                        >
+                          {genBusy ? "Detecting..." : "🎨 Photo se colour generate karo"}
+                        </button>
+                        {imageBoxes.length > 0 && (
+                          <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-700">
+                            <input type="checkbox" checked={gradAllImages} onChange={(e) => setGradAllImages(e.target.checked)} className="w-4 h-4 accent-orange-500" />
+                            Saari photos pe ek saath gradient lagao
+                          </label>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                   {opts && opts.fonts.allowed.length > 0 && textBoxes.length > 0 && (
                     <div className="bg-white rounded-2xl shadow-sm p-4">
