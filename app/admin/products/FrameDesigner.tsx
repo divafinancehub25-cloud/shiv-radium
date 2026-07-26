@@ -473,7 +473,10 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
               )}
             </div>
           ) : (
-            <div style={{ borderRadius, clipPath: clip }} className="w-full h-full bg-gray-200/90 flex flex-col items-center justify-center overflow-hidden">
+            <div
+              style={{ borderRadius, clipPath: clip, background: clip ? "rgba(249,115,22,0.28)" : undefined }}
+              className={`w-full h-full flex flex-col items-center justify-center overflow-hidden ${clip ? "" : "bg-gray-200/90"}`}
+            >
               <ImageIcon className="w-5 h-5 text-gray-500" />
               <span className="text-[9px] text-gray-500 font-medium px-1 text-center leading-tight">{el.label}</span>
             </div>
