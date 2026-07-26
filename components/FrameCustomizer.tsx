@@ -6,6 +6,7 @@ import { ShoppingCart, Upload, Zap, PenLine, X } from "lucide-react";
 import { PriceTag, ProductBadges, AttributePicker, isOutOfStock, variablePrice, findVariation, variationPending, type ExtrasProduct } from "@/components/ProductExtras";
 import CropModal from "@/components/CropModal";
 import ProductGallery from "@/components/ProductGallery";
+import { clipPathCss } from "@/lib/clipShapes";
 
 // ─── Types (mirror of admin FrameDesigner) ──────────────────────────────────
 
@@ -34,6 +35,8 @@ type FrameElement = {
   gradColor2?: string;
   gradAngle?: number;
   gradIntensity?: number;
+  clipShape?: import("@/lib/clipShapes").ClipShape;
+  clipPoints?: import("@/lib/clipShapes").ClipPoint[];
 };
 
 // Same effect math as the admin designer so preview matches exactly
@@ -326,6 +329,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
       const scale = overrides[el.id]?.scale ?? el.imgScale ?? 1;
       const offX = overrides[el.id]?.offX ?? el.imgX ?? 0;
       const offY = overrides[el.id]?.offY ?? el.imgY ?? 0;
+      const clip = clipPathCss(el.clipShape, el.clipPoints);
       return (
         <div
           key={el.id}
@@ -334,7 +338,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
           className={customizing ? "cursor-pointer" : ""}
         >
           {img ? (
-            <div style={{ borderRadius }} className="w-full h-full overflow-hidden relative">
+            <div style={{ borderRadius, clipPath: clip }} className="w-full h-full overflow-hidden relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={img} alt={el.label} draggable={false} style={{ transform: `translate(${offX}%, ${offY}%) scale(${scale})` }} className="w-full h-full object-cover" />
               {(grad || custImgGrad) && <div style={{ background: custImgGrad ?? grad!, borderRadius }} className="absolute inset-0 pointer-events-none mix-blend-overlay" />}
@@ -356,7 +360,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
               )}
             </div>
           ) : (
-            <div style={{ borderRadius }} className="w-full h-full bg-gray-100/80 flex items-center justify-center">
+            <div style={{ borderRadius, clipPath: clip }} className="w-full h-full bg-gray-100/80 flex items-center justify-center">
               <span className="text-[10px] text-gray-400 text-center px-1">{customizing ? "Tap to add photo" : el.label}</span>
             </div>
           )}

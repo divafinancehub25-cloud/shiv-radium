@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Plus, Trash2, Save, Image as ImageIcon, Type, Square, Circle, ChevronUp, ChevronDown, Copy } from "lucide-react";
 import CropModal from "@/components/CropModal";
+import CurvatureEditor from "@/components/CurvatureEditor";
+import { CLIP_PRESETS, clipPathCss } from "@/lib/clipShapes";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -48,6 +50,9 @@ export type FrameElement = {
   gradColor2?: string;
   gradAngle?: number;    // deg
   gradIntensity?: number; // 0-100, where color1 stops
+  // Clip mask (shape the image is clipped into) + custom curvature path
+  clipShape?: import("@/lib/clipShapes").ClipShape;
+  clipPoints?: import("@/lib/clipShapes").ClipPoint[];
 };
 
 // Build CSS for an element's own shadow (text vs box differ)
@@ -204,6 +209,7 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
   const [uploadingImg, setUploadingImg] = useState(false);
   const [newFontName, setNewFontName] = useState("");
   const [cropState, setCropState] = useState<{ file: File; elId: string; aspect: number } | null>(null);
+  const [curveOpen, setCurveOpen] = useState(false);
 
   async function uploadFile(file: File): Promise<string | null> {
     const formData = new FormData();
@@ -437,6 +443,7 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
       ...(el.type !== "text" ? shadowCss(el) : {}),
     };
     const grad = gradientCss(el);
+    const clip = el.type === "image" ? clipPathCss(el.clipShape, el.clipPoints) : undefined;
     return (
       <div
         key={el.id}
@@ -446,7 +453,7 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
       >
         {el.type === "image" && (
           el.defaultImage ? (
-            <div style={{ borderRadius }} className="w-full h-full overflow-hidden relative">
+            <div style={{ borderRadius, clipPath: clip }} className="w-full h-full overflow-hidden relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={el.defaultImage} alt={el.label} draggable={false} style={{ transform: `translate(${el.imgX ?? 0}%, ${el.imgY ?? 0}%) scale(${el.imgScale ?? 1})` }} className="w-full h-full object-cover" />
               {grad && <div style={{ background: grad, borderRadius }} className="absolute inset-0 pointer-events-none mix-blend-overlay" />}
@@ -466,7 +473,7 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
               )}
             </div>
           ) : (
-            <div style={{ borderRadius }} className="w-full h-full bg-gray-200/90 flex flex-col items-center justify-center overflow-hidden">
+            <div style={{ borderRadius, clipPath: clip }} className="w-full h-full bg-gray-200/90 flex flex-col items-center justify-center overflow-hidden">
               <ImageIcon className="w-5 h-5 text-gray-500" />
               <span className="text-[9px] text-gray-500 font-medium px-1 text-center leading-tight">{el.label}</span>
             </div>
@@ -776,7 +783,24 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
               {/* Image box props */}
               {selected.type === "image" && (
                 <div>
-                  <label className="block text-gray-500 mb-0.5">Default Image (customer change kar sakta hai)</label>
+                  {/* Clipping mask shape */}
+                  <label className="block text-gray-500 mb-0.5">Clip Mask Shape (image is shape mein fit hogi)</label>
+                  <select
+                    className={inputClass + " bg-white mb-1.5"}
+                    value={selected.clipShape ?? "none"}
+                    onChange={(e) => {
+                      const v = e.target.value as import("@/lib/clipShapes").ClipShape;
+                      updateSelected({ clipShape: v });
+                      if (v === "custom") setCurveOpen(true);
+                    }}
+                  >
+                    {CLIP_PRESETS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                  </select>
+                  {selected.clipShape === "custom" && (
+                    <button onClick={() => setCurveOpen(true)} className="mb-2 text-[11px] font-semibold text-orange-500 hover:underline">✎ Edit curve shape ({selected.clipPoints?.length ?? 0} points)</button>
+                  )}
+
+                  <label className="block text-gray-500 mb-0.5 mt-2">Default Image (JPEG/PNG — customer change kar sakta hai)</label>
                   <label className="flex items-center justify-center gap-1.5 border-2 border-dashed border-gray-300 rounded-lg py-2 text-xs font-semibold cursor-pointer hover:border-orange-400 hover:bg-orange-50 transition-colors">
                     {uploadingImg ? "Uploading..." : selected.defaultImage ? "🔄 Change Image" : "⬆️ Upload Image"}
                     <input
@@ -1142,6 +1166,16 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
           </div>
         </div>
       </div>
+
+      {/* Curvature / custom clip shape editor */}
+      {curveOpen && selected && selected.type === "image" && (
+        <CurvatureEditor
+          initial={selected.clipPoints ?? []}
+          bgImage={selected.defaultImage ?? bgImage}
+          onClose={() => setCurveOpen(false)}
+          onSave={(pts) => { updateSelected({ clipShape: "custom", clipPoints: pts }); setCurveOpen(false); }}
+        />
+      )}
 
       {/* Crop modal for image box default image */}
       {cropState && (
