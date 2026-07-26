@@ -5,6 +5,38 @@ import { useDropzone } from "react-dropzone";
 import { Upload, CheckCircle, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// Server stores files inline (base64) when cloud storage isn't configured,
+// which caps at ~4MB. Phone photos are often larger, so shrink images in the
+// browser before upload — resize to max 1600px and re-encode as JPEG. This
+// keeps uploads reliably under the limit regardless of storage config.
+async function compressImage(file: File): Promise<File> {
+  if (!file.type.startsWith("image/")) return file; // PDFs pass through untouched
+  try {
+    const bitmap = await createImageBitmap(file);
+    const MAX = 1600;
+    const scale = Math.min(1, MAX / Math.max(bitmap.width, bitmap.height));
+    const w = Math.round(bitmap.width * scale);
+    const h = Math.round(bitmap.height * scale);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, w, h);
+
+    const blob: Blob | null = await new Promise((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.82)
+    );
+    if (!blob) return file;
+
+    const newName = file.name.replace(/\.[^.]+$/, "") + ".jpg";
+    return new File([blob], newName, { type: "image/jpeg" });
+  } catch {
+    return file; // if anything goes wrong, fall back to the original file
+  }
+}
+
 type Props = {
   label: string;
   accept?: string[];
@@ -18,20 +50,35 @@ export function DocumentUploader({ label, accept = ["image/*", "application/pdf"
 
   const onDrop = useCallback(
     async (files: File[]) => {
-      const file = files[0];
-      if (!file) return;
+      const raw = files[0];
+      if (!raw) return;
       setError("");
       setUploading(true);
+
+      const file = await compressImage(raw);
+
+      // Guard against large PDFs that can't be shrunk in the browser.
+      if (file.size > 4 * 1024 * 1024) {
+        setUploading(false);
+        setError("File too large — please upload a photo, or a PDF under 4MB");
+        return;
+      }
 
       const fd = new FormData();
       fd.append("file", file);
 
-      const res = await fetch("/api/diva/kyc/upload", { method: "POST", body: fd });
-      const data = await res.json();
-      setUploading(false);
-
-      if (!res.ok) { setError(data.error ?? "Upload failed"); return; }
-      onUploaded(data.url, data.fileName);
+      let data: { url?: string; fileName?: string; error?: string } = {};
+      try {
+        const res = await fetch("/api/diva/kyc/upload", { method: "POST", body: fd });
+        data = await res.json();
+        setUploading(false);
+        if (!res.ok) { setError(data.error ?? "Upload failed"); return; }
+      } catch {
+        setUploading(false);
+        setError("Upload failed — please check your connection and try again");
+        return;
+      }
+      onUploaded(data.url ?? "", data.fileName ?? "");
     },
     [onUploaded]
   );
@@ -82,7 +129,7 @@ export function DocumentUploader({ label, accept = ["image/*", "application/pdf"
           <p className="text-sm text-zinc-400">
             {uploading ? "Uploading..." : "Drop file here or click to upload"}
           </p>
-          <p className="text-xs text-zinc-600">JPG, PNG, PDF — max 10MB</p>
+          <p className="text-xs text-zinc-600">JPG, PNG, PDF — photos auto-compressed</p>
         </div>
       </div>
       {error && <p className="text-xs text-red-400">{error}</p>}
