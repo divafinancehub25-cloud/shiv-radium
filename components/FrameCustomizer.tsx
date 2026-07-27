@@ -69,6 +69,7 @@ type CustomerOptions = {
   customFonts: { label: string; family: string; url?: string; dataUrl?: string }[];
   bgAspect?: number;
   acrylicMirror?: { enabled: boolean; allowed: string[]; default: string };
+  gradient?: { enabled: boolean; c1: string; c2: string; angle: number; allImages: boolean };
 };
 
 // Acrylic mirror finishes (must match admin FrameDesigner list)
@@ -82,45 +83,6 @@ const MIRROR_FINISHES: Record<string, string> = {
   "Black Mirror": "linear-gradient(135deg,#6e6e6e 0%,#2b2b2b 40%,#000000 65%,#5a5a5a 100%)",
 };
 const MIRROR_TEXT_SHADOW = "0 1px 0 rgba(255,255,255,.6), 0 2px 2px rgba(0,0,0,.35), 0 4px 6px rgba(0,0,0,.3)";
-
-// Detect the dominant colour of an image (downscaled average of bright pixels)
-function dominantColor(url: string): Promise<string> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      try {
-        const c = document.createElement("canvas");
-        const s = 40;
-        c.width = s; c.height = s;
-        const ctx = c.getContext("2d")!;
-        ctx.drawImage(img, 0, 0, s, s);
-        const data = ctx.getImageData(0, 0, s, s).data;
-        let r = 0, g = 0, b = 0, n = 0;
-        for (let i = 0; i < data.length; i += 4) {
-          const a = data[i + 3];
-          if (a < 125) continue;
-          const br = (data[i] + data[i + 1] + data[i + 2]) / 3;
-          if (br < 20 || br > 240) continue; // skip near-black/near-white
-          r += data[i]; g += data[i + 1]; b += data[i + 2]; n++;
-        }
-        if (n === 0) { resolve("#d4af37"); return; }
-        const hex = (v: number) => Math.round(v / n).toString(16).padStart(2, "0");
-        resolve(`#${hex(r)}${hex(g)}${hex(b)}`);
-      } catch { resolve("#d4af37"); }
-    };
-    img.onerror = () => resolve("#d4af37");
-    img.src = url;
-  });
-}
-
-// Lighten a hex colour toward white (for gradient colour 2)
-function lighten(hex: string, amt = 0.55): string {
-  const m = hex.replace("#", "");
-  const r = parseInt(m.slice(0, 2), 16), g = parseInt(m.slice(2, 4), 16), b = parseInt(m.slice(4, 6), 16);
-  const mix = (v: number) => Math.round(v + (255 - v) * amt).toString(16).padStart(2, "0");
-  return `#${mix(r)}${mix(g)}${mix(b)}`;
-}
 
 type Template = {
   id: string;
@@ -173,24 +135,9 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
   // Step-by-step customize drawer: 1 = Text/Photo, 2 = Color & Size
   const [step, setStep] = useState(1);
   const [mirrorFinish, setMirrorFinish] = useState<string | null>(null);
-  // Customer gradient (simple Light ON/OFF) + apply to all images + auto-colour
-  const [custGrad, setCustGrad] = useState<{ on: boolean; c1: string; c2: string; angle: number }>({ on: false, c1: "#d4af37", c2: "#f7e28f", angle: 135 });
-  const [gradAllImages, setGradAllImages] = useState(false);
-  const [genBusy, setGenBusy] = useState(false);
-
-  const custGradCss = `linear-gradient(${custGrad.angle}deg, ${custGrad.c1} 0%, ${custGrad.c2} 100%)`;
-
-  // Auto-generate gradient colours from the first available image on the design
-  async function generateFromImage() {
-    setGenBusy(true);
-    const firstImg = imageBoxes.map((el) => overrides[el.id]?.image ?? el.defaultImage).find(Boolean);
-    const src = firstImg ?? product.images?.[0];
-    if (src) {
-      const dom = await dominantColor(src);
-      setCustGrad((g) => ({ ...g, on: true, c1: dom, c2: lighten(dom) }));
-    }
-    setGenBusy(false);
-  }
+  // Customer only toggles the admin-defined gradient ON/OFF (config read below,
+  // after `template` is defined)
+  const [gradOn, setGradOn] = useState(false);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const canvasRef = useRef<HTMLDivElement>(null);
   const scaleDragRef = useRef<{ elId: string; mode: "scale" | "pan"; startX: number; startY: number; origScale: number; origX: number; origY: number; elW: number; elH: number } | null>(null);
@@ -235,6 +182,11 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
 
   const template = templates[activeIdx];
   const opts = template.options;
+  // Admin-defined gradient config; customer only flips gradOn
+  const adminGradientCfg = template.options?.gradient;
+  const custGrad = { on: gradOn && !!adminGradientCfg?.enabled, c1: adminGradientCfg?.c1 ?? "#d4af37", c2: adminGradientCfg?.c2 ?? "#f7e28f", angle: adminGradientCfg?.angle ?? 135 };
+  const gradAllImages = !!adminGradientCfg?.allImages;
+  const custGradCss = `linear-gradient(${custGrad.angle}deg, ${custGrad.c1} 0%, ${custGrad.c2} 100%)`;
   const elements = [...template.elements].sort((a, b) => a.z - b.z);
   const imageBoxes = elements.filter((e) => e.type === "image");
   const textBoxes = elements.filter((e) => e.type === "text");
@@ -246,6 +198,8 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
     setTextColor(null);
     setFont(null);
     setTextSize(null);
+    setGradOn(false);
+    setMirrorFinish(null);
   }
 
   async function uploadImage(elId: string, file: File) {
@@ -748,46 +702,27 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                     </div>
                   )}
 
-                  {/* Gradient — simple Light ON/OFF + apply to all + auto-colour */}
-                  <div className="bg-white rounded-2xl shadow-sm p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-800">🌈 Gradient Light</label>
-                        <p className="text-[11px] text-gray-400">Text/photo pe colourful gradient</p>
-                      </div>
-                      <button
-                        onClick={() => setCustGrad((g) => ({ ...g, on: !g.on }))}
-                        style={{ border: "none" }}
-                        className={`w-14 h-7 rounded-full transition-colors relative ${custGrad.on ? "bg-gray-900" : "bg-gray-200"}`}
-                      >
-                        <span className={`absolute top-1 w-5 h-5 rounded-full transition-all ${custGrad.on ? "left-8 bg-amber-300" : "left-1 bg-white"}`} />
-                      </button>
-                    </div>
-                    {custGrad.on && (
-                      <div className="mt-3 space-y-3">
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs text-gray-500 shrink-0">Colors</span>
-                          <input type="color" value={custGrad.c1} onChange={(e) => setCustGrad((g) => ({ ...g, c1: e.target.value }))} className="w-9 h-8 rounded-lg cursor-pointer" style={{ border: "none" }} />
-                          <input type="color" value={custGrad.c2} onChange={(e) => setCustGrad((g) => ({ ...g, c2: e.target.value }))} className="w-9 h-8 rounded-lg cursor-pointer" style={{ border: "none" }} />
-                          <div className="flex-1 h-8 rounded-lg" style={{ background: custGradCss }} />
+                  {/* Gradient — only a single ON/OFF switch (admin sets colours) */}
+                  {adminGradientCfg?.enabled && (
+                    <div className="bg-white rounded-2xl shadow-sm p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="w-8 h-8 rounded-full shrink-0" style={{ background: custGradCss }} />
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-800">🌈 Gradient Light</label>
+                            <p className="text-[11px] text-gray-400">Design pe premium gradient shine</p>
+                          </div>
                         </div>
                         <button
-                          onClick={generateFromImage}
-                          disabled={genBusy}
+                          onClick={() => setGradOn((v) => !v)}
                           style={{ border: "none" }}
-                          className="w-full bg-gray-100 hover:bg-amber-50 text-gray-700 text-xs font-semibold py-2.5 rounded-xl disabled:opacity-60"
+                          className={`w-14 h-7 rounded-full transition-colors relative ${gradOn ? "bg-gray-900" : "bg-gray-200"}`}
                         >
-                          {genBusy ? "Detecting..." : "🎨 Photo se colour generate karo"}
+                          <span className={`absolute top-1 w-5 h-5 rounded-full transition-all ${gradOn ? "left-8 bg-amber-300" : "left-1 bg-white"}`} />
                         </button>
-                        {imageBoxes.length > 0 && (
-                          <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-700">
-                            <input type="checkbox" checked={gradAllImages} onChange={(e) => setGradAllImages(e.target.checked)} className="w-4 h-4 accent-orange-500" />
-                            Saari photos pe ek saath gradient lagao
-                          </label>
-                        )}
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   {opts && opts.fonts.allowed.length > 0 && textBoxes.length > 0 && (
                     <div className="bg-white rounded-2xl shadow-sm p-4">

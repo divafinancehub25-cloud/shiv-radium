@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Plus, Trash2, Save, Image as ImageIcon, Type, Square, Circle, ChevronUp, ChevronDown, Copy } from "lucide-react";
 import CropModal from "@/components/CropModal";
 import CurvatureEditor from "@/components/CurvatureEditor";
-import { CLIP_PRESETS, clipPathCss } from "@/lib/clipShapes";
+import { clipPathCss } from "@/lib/clipShapes";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -92,6 +92,8 @@ export type CustomerOptions = {
   bgAspect?: number;
   // Acrylic mirror text: admin per-product enable + allowed mirror finishes
   acrylicMirror?: { enabled: boolean; allowed: string[]; default: string };
+  // Customer gradient: admin sets the colours; customer only gets an ON/OFF switch
+  gradient?: { enabled: boolean; c1: string; c2: string; angle: number; allImages: boolean };
 };
 
 // Acrylic mirror finishes — premium 4mm mirror look with 3D raised text
@@ -124,6 +126,7 @@ function defaultOptions(): CustomerOptions {
     customFonts: [],
     bgAspect: 4 / 3,
     acrylicMirror: { enabled: false, allowed: ACRYLIC_MIRROR_COLORS.map((c) => c.label), default: "Normal Gold" },
+    gradient: { enabled: false, c1: "#d4af37", c2: "#f7e28f", angle: 135, allImages: false },
   };
 }
 
@@ -267,7 +270,7 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
     setTemplateName(t.name);
     setElements(t.elements);
     setBgImage(t.bgImage ?? productImage);
-    setOptions({ ...defaultOptions(), ...(t.options ?? {}), acrylicMirror: { ...defaultOptions().acrylicMirror!, ...(t.options?.acrylicMirror ?? {}) } });
+    setOptions({ ...defaultOptions(), ...(t.options ?? {}), acrylicMirror: { ...defaultOptions().acrylicMirror!, ...(t.options?.acrylicMirror ?? {}) }, gradient: { ...defaultOptions().gradient!, ...(t.options?.gradient ?? {}) } });
     setSelectedId(null);
   }
 
@@ -786,22 +789,24 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
               {/* Image box props */}
               {selected.type === "image" && (
                 <div>
-                  {/* Clipping mask shape */}
-                  <label className="block text-gray-500 mb-0.5">Clip Mask Shape (image is shape mein fit hogi)</label>
-                  <select
-                    className={inputClass + " bg-white mb-1.5"}
-                    value={selected.clipShape ?? "none"}
-                    onChange={(e) => {
-                      const v = e.target.value as import("@/lib/clipShapes").ClipShape;
-                      updateSelected({ clipShape: v });
-                      if (v === "custom") setCurveOpen(true);
-                    }}
-                  >
-                    {CLIP_PRESETS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-                  </select>
-                  {selected.clipShape === "custom" && (
-                    <button onClick={() => setCurveOpen(true)} className="mb-2 text-[11px] font-semibold text-orange-500 hover:underline">✎ Edit curve shape ({selected.clipPoints?.length ?? 0} points)</button>
-                  )}
+                  {/* Clip mask — only the custom curvature tool (no preset shapes) */}
+                  <label className="block text-gray-500 mb-1">Clip Mask (curve tool se custom shape banao)</label>
+                  <div className="flex items-center gap-2 mb-2">
+                    <button
+                      onClick={() => { updateSelected({ clipShape: "custom" }); setCurveOpen(true); }}
+                      className="flex-1 bg-gray-900 text-white text-xs font-semibold py-2 rounded-lg hover:bg-gray-700"
+                    >
+                      ✎ {selected.clipShape === "custom" && (selected.clipPoints?.length ?? 0) > 0 ? `Edit curve (${selected.clipPoints!.length} points)` : "Create curve shape"}
+                    </button>
+                    {selected.clipShape === "custom" && (
+                      <button
+                        onClick={() => updateSelected({ clipShape: "none", clipPoints: [] })}
+                        className="text-[11px] text-red-500 hover:underline shrink-0"
+                      >
+                        ✕ Remove
+                      </button>
+                    )}
+                  </div>
 
                   <label className="block text-gray-500 mb-0.5 mt-2">Default Image (JPEG/PNG — customer change kar sakta hai)</label>
                   <label className="flex items-center justify-center gap-1.5 border-2 border-dashed border-gray-300 rounded-lg py-2 text-xs font-semibold cursor-pointer hover:border-orange-400 hover:bg-orange-50 transition-colors">
@@ -1133,6 +1138,39 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Gradient — admin sets colours, customer gets only ON/OFF */}
+          <div className="border border-gray-200 rounded-xl p-4 md:col-span-2">
+            <label className="flex items-center gap-2 cursor-pointer mb-2">
+              <input
+                type="checkbox"
+                checked={options.gradient?.enabled ?? false}
+                onChange={(e) => setOptions((o) => ({ ...o, gradient: { ...(o.gradient ?? { c1: "#d4af37", c2: "#f7e28f", angle: 135, allImages: false }), enabled: e.target.checked } }))}
+                className="w-4 h-4 accent-orange-500"
+              />
+              <span className="text-xs font-bold text-gray-800">🌈 Gradient — customer ON/OFF switch dikhao</span>
+            </label>
+            {options.gradient?.enabled && (
+              <div className="pl-6 space-y-2">
+                <p className="text-[10px] text-gray-500">Colours admin set karega — customer sirf ON/OFF karega:</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] text-gray-500">Color 1</span>
+                  <input type="color" value={options.gradient.c1} onChange={(e) => setOptions((o) => ({ ...o, gradient: { ...o.gradient!, c1: e.target.value } }))} className="w-8 h-7 rounded border border-gray-200 cursor-pointer p-0" />
+                  <span className="text-[11px] text-gray-500">Color 2</span>
+                  <input type="color" value={options.gradient.c2} onChange={(e) => setOptions((o) => ({ ...o, gradient: { ...o.gradient!, c2: e.target.value } }))} className="w-8 h-7 rounded border border-gray-200 cursor-pointer p-0" />
+                  <div className="flex-1 min-w-[80px] h-7 rounded-lg" style={{ background: `linear-gradient(${options.gradient.angle}deg, ${options.gradient.c1} 0%, ${options.gradient.c2} 100%)` }} />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-gray-500 mb-0.5">Direction: {options.gradient.angle}°</label>
+                  <input type="range" min={0} max={360} value={options.gradient.angle} onChange={(e) => setOptions((o) => ({ ...o, gradient: { ...o.gradient!, angle: Number(e.target.value) } }))} className="w-full accent-orange-500" />
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer text-[11px] text-gray-600">
+                  <input type="checkbox" checked={options.gradient.allImages} onChange={(e) => setOptions((o) => ({ ...o, gradient: { ...o.gradient!, allImages: e.target.checked } }))} className="w-3.5 h-3.5 accent-orange-500" />
+                  Saari photos pe bhi gradient lagao (text ke saath)
+                </label>
               </div>
             )}
           </div>
