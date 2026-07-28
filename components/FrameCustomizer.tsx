@@ -296,22 +296,6 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={img} alt={el.label} draggable={false} style={{ transform: `translate(${offX}%, ${offY}%) scale(${scale})` }} className="w-full h-full object-cover" />
               {(grad || custImgGrad) && <div style={{ background: custImgGrad ?? grad!, borderRadius }} className="absolute inset-0 pointer-events-none mix-blend-overlay" />}
-              {customizing && (
-                <>
-                  <div
-                    onPointerDown={(e) => startImgDrag(el, "scale", e)}
-                    onClick={(e) => e.stopPropagation()}
-                    title="Photo zoom — drag karo"
-                    className="absolute bottom-1 right-1 w-3 h-3 bg-blue-500 border border-white rounded-full cursor-ew-resize shadow z-10"
-                  />
-                  <div
-                    onPointerDown={(e) => startImgDrag(el, "pan", e)}
-                    onClick={(e) => e.stopPropagation()}
-                    title="Photo adjust — up/down/left/right drag karo"
-                    className="absolute bottom-1 left-1 w-3 h-3 bg-green-500 border border-white rounded-full cursor-move shadow z-10"
-                  />
-                </>
-              )}
             </div>
           ) : (
             <div style={{ borderRadius, clipPath: clip }} className="w-full h-full bg-gray-100/80 flex items-center justify-center">
