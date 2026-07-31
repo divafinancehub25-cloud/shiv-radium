@@ -7,10 +7,17 @@ function secret(): string {
   return process.env.ADMIN_SESSION_SECRET || process.env.RAZORPAY_KEY_SECRET || "shiv-radium-fallback-secret-change-me";
 }
 
+// Edge-safe base64url (no Node Buffer — middleware runs on the Edge runtime).
+function toBase64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 async function hmac(data: string): Promise<string> {
   const key = await crypto.subtle.importKey("raw", enc.encode(secret()), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const sig = await crypto.subtle.sign("HMAC", key, enc.encode(data));
-  return Buffer.from(new Uint8Array(sig)).toString("base64url");
+  return toBase64Url(new Uint8Array(sig));
 }
 
 // token = "<userId>.<hmac(userId)>"
