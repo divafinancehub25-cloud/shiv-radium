@@ -37,7 +37,19 @@ type FrameElement = {
   gradIntensity?: number;
   clipShape?: import("@/lib/clipShapes").ClipShape;
   clipPoints?: import("@/lib/clipShapes").ClipPoint[];
+  maskImage?: string;
+  fillImage?: string;
 };
+
+// Clip an element to an uploaded PNG's alpha shape
+function maskStyle(url?: string): React.CSSProperties {
+  if (!url) return {};
+  return {
+    WebkitMaskImage: `url(${url})`, maskImage: `url(${url})`,
+    WebkitMaskSize: "100% 100%", maskSize: "100% 100%",
+    WebkitMaskRepeat: "no-repeat", maskRepeat: "no-repeat",
+  };
+}
 
 // Same effect math as the admin designer so preview matches exactly
 function shadowCss(el: FrameElement): { boxShadow?: string; textShadow?: string } {
@@ -275,8 +287,12 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
     const custImgGrad = custGrad.on && gradAllImages ? custGradCss : null;
     const grad = adminGrad; // used for image overlay + text (admin)
     if (el.type === "frame") {
-      // Customer's frame colour wins over the admin gradient when chosen
-      return <div key={el.id} style={{ ...style, background: frameColor ?? grad ?? el.fill }} />;
+      // Uploaded frame image renders as-is; else coloured fill (masked if PNG shape)
+      if (el.fillImage && !frameColor) {
+        // eslint-disable-next-line @next/next/no-img-element
+        return <img key={el.id} src={el.fillImage} alt="" draggable={false} style={{ ...style }} className="object-contain" />;
+      }
+      return <div key={el.id} style={{ ...style, background: frameColor ?? grad ?? el.fill, ...maskStyle(el.maskImage) }} />;
     }
     if (el.type === "image") {
       const img = overrides[el.id]?.image ?? el.defaultImage;
@@ -292,13 +308,13 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
           className={customizing ? "cursor-pointer" : ""}
         >
           {img ? (
-            <div style={{ borderRadius, clipPath: clip }} className="w-full h-full overflow-hidden relative">
+            <div style={{ borderRadius, clipPath: clip, ...maskStyle(el.maskImage) }} className="w-full h-full overflow-hidden relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={img} alt={el.label} draggable={false} style={{ transform: `translate(${offX}%, ${offY}%) scale(${scale})` }} className="w-full h-full object-cover" />
               {(grad || custImgGrad) && <div style={{ background: custImgGrad ?? grad!, borderRadius }} className="absolute inset-0 pointer-events-none mix-blend-overlay" />}
             </div>
           ) : (
-            <div style={{ borderRadius, clipPath: clip }} className="w-full h-full bg-gray-100/80 flex items-center justify-center">
+            <div style={{ borderRadius, clipPath: clip, ...maskStyle(el.maskImage) }} className="w-full h-full bg-gray-100/80 flex items-center justify-center">
               <span className="text-[10px] text-gray-400 text-center px-1">{customizing ? "Tap to add photo" : el.label}</span>
             </div>
           )}

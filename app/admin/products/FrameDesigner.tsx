@@ -53,7 +53,24 @@ export type FrameElement = {
   // Clip mask (shape the image is clipped into) + custom curvature path
   clipShape?: import("@/lib/clipShapes").ClipShape;
   clipPoints?: import("@/lib/clipShapes").ClipPoint[];
+  // Custom shape from an uploaded transparent PNG (used as an alpha mask)
+  maskImage?: string;
+  // Frame rendered as an uploaded image (decorative border/frame PNG)
+  fillImage?: string;
 };
+
+// CSS to clip an element to an uploaded PNG's alpha shape
+function maskStyle(url?: string): React.CSSProperties {
+  if (!url) return {};
+  return {
+    WebkitMaskImage: `url(${url})`,
+    maskImage: `url(${url})`,
+    WebkitMaskSize: "100% 100%",
+    maskSize: "100% 100%",
+    WebkitMaskRepeat: "no-repeat",
+    maskRepeat: "no-repeat",
+  };
+}
 
 // Build CSS for an element's own shadow (text vs box differ)
 export function shadowCss(el: FrameElement): { boxShadow?: string; textShadow?: string } {
@@ -317,6 +334,30 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
     setSelectedId(el.id);
   }
 
+  // Upload a PNG whose alpha becomes a custom shape (mask) for a new frame/img box
+  async function addFromShapePng(type: "frame" | "image", file: File) {
+    const url = await uploadFile(file);
+    if (!url) return;
+    const n = elements.filter((e) => e.type === type).length + 1;
+    const el: FrameElement = type === "frame"
+      ? { id: newId(), type: "frame", label: `Frame ${n}`, x: 15, y: 15, w: 70, h: 70, radius: 0, rotation: 0, z: maxZ() + 1, shape: "rect", fill: "#f97316", maskImage: url }
+      : { id: newId(), type: "image", label: `Img box ${n}`, x: 30, y: 30, w: 34, h: 34, radius: 0, rotation: 0, z: maxZ() + 1, shape: "rect", maskImage: url };
+    setElements((p) => [...p, el]);
+    setSelectedId(el.id);
+  }
+
+  // Upload a normal image → frame becomes that image / img box gets a default image
+  async function addFromImage(type: "frame" | "image", file: File) {
+    const url = await uploadFile(file);
+    if (!url) return;
+    const n = elements.filter((e) => e.type === type).length + 1;
+    const el: FrameElement = type === "frame"
+      ? { id: newId(), type: "frame", label: `Frame ${n}`, x: 10, y: 10, w: 80, h: 80, radius: 0, rotation: 0, z: maxZ() + 1, shape: "rect", fill: "#f97316", fillImage: url }
+      : { id: newId(), type: "image", label: `Img box ${n}`, x: 30, y: 30, w: 34, h: 34, radius: 0, rotation: 0, z: maxZ() + 1, shape: "rect", defaultImage: url };
+    setElements((p) => [...p, el]);
+    setSelectedId(el.id);
+  }
+
   function duplicateSelected() {
     if (!selected) return;
     const copy = { ...selected, id: newId(), label: selected.label + " copy", x: Math.min(90, selected.x + 4), y: Math.min(90, selected.y + 4), z: maxZ() + 1 };
@@ -456,7 +497,7 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
       >
         {el.type === "image" && (
           el.defaultImage ? (
-            <div style={{ borderRadius, clipPath: clip }} className="w-full h-full overflow-hidden relative">
+            <div style={{ borderRadius, clipPath: clip, ...maskStyle(el.maskImage) }} className="w-full h-full overflow-hidden relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={el.defaultImage} alt={el.label} draggable={false} style={{ transform: `translate(${el.imgX ?? 0}%, ${el.imgY ?? 0}%) scale(${el.imgScale ?? 1})` }} className="w-full h-full object-cover" />
               {grad && <div style={{ background: grad, borderRadius }} className="absolute inset-0 pointer-events-none mix-blend-overlay" />}
@@ -477,8 +518,8 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
             </div>
           ) : (
             <div
-              style={{ borderRadius, clipPath: clip, background: clip ? "rgba(249,115,22,0.28)" : undefined }}
-              className={`w-full h-full flex flex-col items-center justify-center overflow-hidden ${clip ? "" : "bg-gray-200/90"}`}
+              style={{ borderRadius, clipPath: clip, ...maskStyle(el.maskImage), background: (clip || el.maskImage) ? "rgba(249,115,22,0.28)" : undefined }}
+              className={`w-full h-full flex flex-col items-center justify-center overflow-hidden ${(clip || el.maskImage) ? "" : "bg-gray-200/90"}`}
             >
               <ImageIcon className="w-5 h-5 text-gray-500" />
               <span className="text-[9px] text-gray-500 font-medium px-1 text-center leading-tight">{el.label}</span>
@@ -503,7 +544,12 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
           </div>
         )}
         {el.type === "frame" && (
-          <div style={{ background: grad ?? el.fill, borderRadius }} className="w-full h-full" />
+          el.fillImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={el.fillImage} alt={el.label} draggable={false} style={{ borderRadius }} className="w-full h-full object-contain" />
+          ) : (
+            <div style={{ background: grad ?? el.fill, borderRadius, ...maskStyle(el.maskImage) }} className="w-full h-full" />
+          )
         )}
         {/* Resize handle */}
         {isSel && (
@@ -573,18 +619,36 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
             <div className="p-2 space-y-1.5">
               <details className="border border-gray-200 rounded-lg" open>
                 <summary className="cursor-pointer px-2.5 py-1.5 text-[10px] font-semibold text-gray-600 select-none">▸ Insert frame</summary>
-                <div className="flex gap-2 p-2.5 pt-1">
+                <div className="flex flex-wrap gap-2 p-2.5 pt-1 items-center">
                   <button onClick={() => addFrame("rect")} title="Rectangle frame" className="w-9 h-7 border-2 border-gray-800 rounded-sm hover:bg-orange-50" />
                   <button onClick={() => addFrame("ellipse")} title="Ellipse frame" className="w-9 h-7 border-2 border-gray-800 rounded-full hover:bg-orange-50" />
                   <button onClick={() => addFrame("rounded")} title="Rounded frame" className="w-9 h-7 border-2 border-gray-800 rounded-lg hover:bg-orange-50" />
+                  {/* 🟢 custom shape from PNG */}
+                  <label title="Shape PNG upload — is PNG ki shape ka frame banega" className="w-9 h-7 rounded-lg bg-green-100 border-2 border-green-500 text-green-700 flex items-center justify-center text-[9px] font-bold cursor-pointer hover:bg-green-200">
+                    PNG
+                    <input type="file" accept="image/png,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) addFromShapePng("frame", f); e.target.value = ""; }} />
+                  </label>
+                  {/* ⬛ image upload */}
+                  <label title="Image upload — frame ke roop mein image" className="w-9 h-7 rounded-lg bg-gray-900 text-white flex items-center justify-center cursor-pointer hover:bg-gray-700"><ImageIcon className="w-3.5 h-3.5" />
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) addFromImage("frame", f); e.target.value = ""; }} />
+                  </label>
                 </div>
               </details>
               <details className="border border-gray-200 rounded-lg" open>
                 <summary className="cursor-pointer px-2.5 py-1.5 text-[10px] font-semibold text-gray-600 select-none">▸ Insert img box</summary>
-                <div className="flex gap-2 p-2.5 pt-1">
+                <div className="flex flex-wrap gap-2 p-2.5 pt-1 items-center">
                   <button onClick={() => addImageBox("rect")} title="Rectangle image box" className="w-9 h-9 border-2 border-gray-800 rounded-sm hover:bg-orange-50 flex items-center justify-center"><Square className="w-3.5 h-3.5" /></button>
                   <button onClick={() => addImageBox("ellipse")} title="Circle image box" className="w-9 h-9 border-2 border-gray-800 rounded-full hover:bg-orange-50 flex items-center justify-center"><Circle className="w-3.5 h-3.5" /></button>
                   <button onClick={() => addImageBox("rounded")} title="Rounded image box" className="w-9 h-9 border-2 border-blue-500 rounded-xl hover:bg-orange-50 flex items-center justify-center text-blue-500"><Square className="w-3.5 h-3.5" /></button>
+                  {/* 🟢 custom shape from PNG */}
+                  <label title="Shape PNG upload — is PNG ki shape ka image box banega (customer photo isi shape mein)" className="w-9 h-9 rounded-lg bg-green-100 border-2 border-green-500 text-green-700 flex items-center justify-center text-[9px] font-bold cursor-pointer hover:bg-green-200">
+                    PNG
+                    <input type="file" accept="image/png,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) addFromShapePng("image", f); e.target.value = ""; }} />
+                  </label>
+                  {/* ⬛ image upload */}
+                  <label title="Image upload — image box mein default photo" className="w-9 h-9 rounded-lg bg-gray-900 text-white flex items-center justify-center cursor-pointer hover:bg-gray-700"><ImageIcon className="w-3.5 h-3.5" />
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) addFromImage("image", f); e.target.value = ""; }} />
+                  </label>
                 </div>
               </details>
               <details className="border border-gray-200 rounded-lg" open>
