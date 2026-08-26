@@ -60,16 +60,16 @@ export function FVCalculator() {
             </div>
           </div>
 
-          {/* Growth Rate */}
+          {/* Growth Rate — MONTHLY (STICKO gives 15% compounded monthly) */}
           <div>
             <div className="flex justify-between mb-1.5">
-              <label className="text-xs text-white/40">Annual Growth Rate</label>
-              <span className="text-sm font-mono text-[#D4AF37]">{fmtPct(calcInput.growthRate)}</span>
+              <label className="text-xs text-white/40">Monthly Growth Rate</label>
+              <span className="text-sm font-mono text-[#D4AF37]">{fmtPct(calcInput.growthRate / 12)} / mo</span>
             </div>
-            <input type="range" min={0} max={30} step={0.5} value={calcInput.growthRate}
-              onChange={e => setCalcInput({ growthRate: Number(e.target.value) })} className={SLIDER_CLASS} />
+            <input type="range" min={0} max={30} step={0.5} value={calcInput.growthRate / 12}
+              onChange={e => setCalcInput({ growthRate: Number(e.target.value) * 12, compoundingFreq: "MONTHLY" })} className={SLIDER_CLASS} />
             <div className="flex justify-between text-[10px] text-white/20 mt-0.5">
-              <span>0%</span><span>30%</span>
+              <span>0%/mo</span><span>30%/mo</span>
             </div>
           </div>
 
@@ -77,14 +77,9 @@ export function FVCalculator() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-white/40 mb-1 block">Compounding</label>
-              <select value={calcInput.compoundingFreq}
-                onChange={e => setCalcInput({ compoundingFreq: e.target.value as CompoundingFreq })}
-                className="w-full px-3 py-2 rounded-lg bg-white/[0.05] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-[#D4AF37]/40">
-                <option value="DAILY">Daily</option>
-                <option value="MONTHLY">Monthly</option>
-                <option value="QUARTERLY">Quarterly</option>
-                <option value="ANNUALLY">Annually</option>
-              </select>
+              <div className="w-full px-3 py-2 rounded-lg bg-white/[0.05] border border-white/[0.08] text-white/70 text-xs">
+                Monthly (compound)
+              </div>
             </div>
             <div>
               <label className="text-xs text-white/40 mb-1 block">Contribution</label>

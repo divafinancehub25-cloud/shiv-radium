@@ -27,7 +27,9 @@ const DEFAULT_INPUT: ForecastInput = {
   contributionAmount: 500,
   contributionFreq: "MONTHLY",
   durationYears: 10,
-  growthRate: 8,
+  // growthRate is stored as the nominal ANNUAL rate. STICKO offers 15% per month,
+  // compounded monthly → 15 × 12 = 180 nominal annual, MONTHLY compounding.
+  growthRate: 180,
   compoundingFreq: "MONTHLY",
 };
 
