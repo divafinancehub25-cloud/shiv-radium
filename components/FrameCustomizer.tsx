@@ -295,6 +295,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
       return <div key={el.id} style={{ ...style, background: frameColor ?? grad ?? el.fill, ...maskStyle(el.maskImage) }} />;
     }
     if (el.type === "image") {
+      const customerUploaded = !!overrides[el.id]?.image;
       const img = overrides[el.id]?.image ?? el.defaultImage;
       const scale = overrides[el.id]?.scale ?? el.imgScale ?? 1;
       const offX = overrides[el.id]?.offX ?? el.imgX ?? 0;
@@ -310,7 +311,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
           {img ? (
             <div style={{ borderRadius, clipPath: clip, ...maskStyle(el.maskImage) }} className="w-full h-full overflow-hidden relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={img} alt={el.label} draggable={false} style={{ transform: `translate(${offX}%, ${offY}%) scale(${scale})` }} className="w-full h-full object-cover" />
+              <img src={img} alt={el.label} draggable={false} style={{ transform: `translate(${offX}%, ${offY}%) scale(${scale})` }} className={`w-full h-full ${customerUploaded ? "object-contain" : "object-cover"}`} />
               {(grad || custImgGrad) && <div style={{ background: custImgGrad ?? grad!, borderRadius }} className="absolute inset-0 pointer-events-none mix-blend-overlay" />}
             </div>
           ) : (
@@ -399,8 +400,8 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
-              // Crop first — box ke preset shape mein
-              if (file) setCropState({ file, elId: el.id, aspect: (el.w / el.h) * (opts?.bgAspect || 1) });
+              // Direct upload — no forced crop, poori image dikhegi (top/bottom cut nahi)
+              if (file) uploadImage(el.id, file);
               e.target.value = "";
             }}
           />
