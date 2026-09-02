@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { computeShipping, readShipSettings, type ShipItem } from "@/lib/shipping";
 
 function generateOrderNumber() {
   const date = new Date();
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
       customerName, customerPhone, customerEmail,
       address, city, state, pinCode,
       giftWrapping, giftMessage, deliveryDate,
-      items, subtotal, shippingCharge, giftWrapCharge,
+      items, giftWrapCharge,
       gstNumber, gstRate,
     } = body;
 
@@ -34,10 +35,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
+    // ── SERVER-SIDE recalculation (never trust client subtotal/shipping) ──
+    const cartItems = (items as CartItem[]) ?? [];
+    const productIds = [...new Set(cartItems.map((i) => i.productId).filter(Boolean))];
+    const [prodRows, settingRows] = await Promise.all([
+      db.product.findMany({ where: { id: { in: productIds } }, select: { id: true, shippingClass: true, shippingCost: true } }),
+      db.setting.findMany({ where: { key: { in: ["shipping_free_above", "shipping_charge"] } } }),
+    ]);
+    const pmap = new Map(prodRows.map((p) => [p.id, p]));
+    const smap: Record<string, string> = {};
+    for (const s of settingRows) smap[s.key] = s.value;
+
+    const subtotal = cartItems.reduce((s, it) => s + (Number(it.totalPrice) || 0), 0);
+    const shipItems: ShipItem[] = cartItems.map((i) => {
+      const p = pmap.get(i.productId);
+      return {
+        productId: i.productId, quantity: Number(i.quantity) || 1, totalPrice: Number(i.totalPrice) || 0,
+        shippingClass: p?.shippingClass ?? null,
+        shippingCost: p?.shippingCost != null ? Number(p.shippingCost) : null,
+      };
+    });
+    const shippingCharge = computeShipping(shipItems, readShipSettings(smap));
+
     const orderNumber = generateOrderNumber();
     const rate = gstRate ? parseFloat(gstRate) : 0;
-    const gstAmount = rate > 0 ? Number((Number(subtotal) * rate / 100).toFixed(2)) : 0;
-    const finalTotal = Number(subtotal) + Number(shippingCharge) + Number(giftWrapCharge ?? 0) + gstAmount;
+    const gstAmount = rate > 0 ? Number((subtotal * rate / 100).toFixed(2)) : 0;
+    const finalTotal = subtotal + shippingCharge + Number(giftWrapCharge ?? 0) + gstAmount;
 
     // Step 1: create order without items
     const order = await db.order.create({
@@ -112,6 +135,8 @@ export async function POST(req: NextRequest) {
       orderId: order.id,
       orderNumber: order.orderNumber,
       razorpayOrderId,
+      shippingCharge,
+      totalAmount: finalTotal,
     });
   } catch (err) {
     console.error("Order error:", err);

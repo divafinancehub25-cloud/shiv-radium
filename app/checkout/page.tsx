@@ -38,15 +38,27 @@ export default function CheckoutPage() {
     gstNumber: "",
   });
 
+  const [shipping, setShipping] = useState(0);
+
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem("cart") ?? "[]");
     if (stored.length === 0) router.push("/cart");
     setCart(stored);
     setMounted(true);
+    // Real shipping from admin rules + product settings (server = source of truth)
+    if (stored.length > 0) {
+      fetch("/api/shipping/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: stored.map((i: CartItem) => ({ productId: i.productId, quantity: i.quantity, totalPrice: i.totalPrice })) }),
+      })
+        .then((r) => r.json())
+        .then((d) => setShipping(Number(d.shipping) || 0))
+        .catch(() => setShipping(0));
+    }
   }, [router]);
 
   const subtotal = cart.reduce((acc, item) => acc + item.totalPrice, 0);
-  const shipping = subtotal >= 999 ? 0 : 99;
   const giftWrapCharge = form.giftWrapping ? 49 : 0;
   const total = subtotal + shipping + giftWrapCharge;
 
