@@ -11,6 +11,7 @@ type El = {
   x: number; y: number; w: number; h: number; radius: number; rotation: number; z: number;
   text?: string; fontFamily?: string; fontSize?: number; fontWeight?: string;
   align?: "left" | "center" | "right"; color?: string;
+  mirror?: "none" | "h" | "v";
   shape?: string; fill?: string; defaultImage?: string;
   imgScale?: number; imgX?: number; imgY?: number;
   shadowOn?: boolean; shadowType?: "outer" | "inner"; shadowColor?: string; shadowBlur?: number; shadowX?: number; shadowY?: number;
@@ -21,7 +22,7 @@ type El = {
 
 type Snapshot = { name?: string; bgImage?: string | null; aspect?: number; elements: El[]; options?: { customFonts?: { family: string; url?: string }[] } | null };
 type Design = {
-  overrides?: Record<string, { text?: string; image?: string; scale?: number; offX?: number; offY?: number }>;
+  overrides?: Record<string, { text?: string; image?: string; scale?: number; offX?: number; offY?: number; mirror?: "none" | "h" | "v" }>;
   frameColor?: string; textColor?: string; font?: string; textSize?: number;
   mirrorFinish?: string; gradient?: { c1: string; c2: string; angle: number; allImages: boolean };
 };
@@ -51,6 +52,9 @@ function gradientCss(el: El): string | null {
 function maskStyle(url?: string): React.CSSProperties {
   if (!url) return {};
   return { WebkitMaskImage: `url(${url})`, maskImage: `url(${url})`, WebkitMaskSize: "100% 100%", maskSize: "100% 100%", WebkitMaskRepeat: "no-repeat", maskRepeat: "no-repeat" };
+}
+function mirrorCss(mirror?: "none" | "h" | "v"): string {
+  return mirror === "h" ? " scaleX(-1)" : mirror === "v" ? " scaleY(-1)" : "";
 }
 
 export default function DesignRenderer({ snapshot, design, className = "" }: { snapshot: Snapshot; design: Design; className?: string }) {
@@ -101,10 +105,11 @@ export default function DesignRenderer({ snapshot, design, className = "" }: { s
     // text
     const content = ov[el.id]?.text ?? el.text;
     const mirrorGrad = design.mirrorFinish ? MIRROR_FINISHES[design.mirrorFinish] : (custGrad ?? adminGrad);
+    const textMirror = ov[el.id]?.mirror ?? el.mirror;
     return (
       <div
         key={el.id}
-        style={{ ...base, fontFamily: design.font ?? el.fontFamily, fontSize: `${design.textSize ?? el.fontSize}px`, fontWeight: el.fontWeight as React.CSSProperties["fontWeight"], color: mirrorGrad ? undefined : (design.textColor ?? el.color), textAlign: el.align }}
+        style={{ ...base, transform: `rotate(${el.rotation}deg)${mirrorCss(textMirror)}`, fontFamily: design.font ?? el.fontFamily, fontSize: `${design.textSize ?? el.fontSize}px`, fontWeight: el.fontWeight as React.CSSProperties["fontWeight"], color: mirrorGrad ? undefined : (design.textColor ?? el.color), textAlign: el.align }}
         className="flex items-center overflow-hidden"
       >
         <span

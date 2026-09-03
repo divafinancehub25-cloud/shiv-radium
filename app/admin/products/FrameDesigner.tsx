@@ -29,6 +29,9 @@ export type FrameElement = {
   fontWeight?: string;
   align?: "left" | "center" | "right";
   color?: string;
+  // text mirror: none | horizontal flip | vertical flip
+  mirror?: "none" | "h" | "v";
+  mirrorAllowed?: boolean; // customer can change the mirror
   // frame/shape
   shape?: Shape;
   fill?: string;
@@ -84,6 +87,11 @@ export function shadowCss(el: FrameElement): { boxShadow?: string; textShadow?: 
     return { textShadow: el.shadowType === "inner" ? `0 1px 1px ${color}` : `${x}px ${y}px ${blur}px ${color}` };
   }
   return { boxShadow: `${el.shadowType === "inner" ? "inset " : ""}${x}px ${y}px ${blur}px ${color}` };
+}
+
+// Mirror transform for text (horizontal / vertical flip)
+export function mirrorCss(mirror?: "none" | "h" | "v"): string {
+  return mirror === "h" ? " scaleX(-1)" : mirror === "v" ? " scaleY(-1)" : "";
 }
 
 // Build CSS gradient for an element
@@ -479,7 +487,7 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
       top: `${el.y}%`,
       width: `${el.w}%`,
       height: `${el.h}%`,
-      transform: `rotate(${el.rotation}deg)`,
+      transform: `rotate(${el.rotation}deg)${el.type === "text" ? mirrorCss(el.mirror) : ""}`,
       zIndex: el.z,
       borderRadius,
       touchAction: "none",
@@ -935,6 +943,19 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
                         <button key={a} onClick={() => updateSelected({ align: a })} className={`flex-1 border rounded-lg py-1.5 capitalize ${selected.align === a ? "border-orange-500 bg-orange-50 text-orange-600 font-semibold" : "border-gray-200"}`}>{a}</button>
                       ))}
                     </div>
+                  </div>
+                  {/* Mirror Text */}
+                  <div>
+                    <label className="block text-gray-500 mb-0.5">Mirror Text</label>
+                    <div className="flex gap-1">
+                      {([["none", "Normal"], ["h", "↔ Horizontal"], ["v", "↕ Vertical"]] as const).map(([m, lbl]) => (
+                        <button key={m} onClick={() => updateSelected({ mirror: m })} className={`flex-1 border rounded-lg py-1.5 text-[11px] ${(selected.mirror ?? "none") === m ? "border-orange-500 bg-orange-50 text-orange-600 font-semibold" : "border-gray-200"}`}>{lbl}</button>
+                      ))}
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer mt-1.5">
+                      <input type="checkbox" checked={selected.mirrorAllowed ?? false} onChange={(e) => updateSelected({ mirrorAllowed: e.target.checked })} className="w-3.5 h-3.5 accent-orange-500" />
+                      <span className="text-[11px] text-gray-600">Customer mirror change kar sake</span>
+                    </label>
                   </div>
                   <div>
                     <label className="block text-gray-500 mb-0.5">Text Color</label>

@@ -18,6 +18,7 @@ type FrameElement = {
   radius: number; rotation: number; z: number;
   text?: string; fontFamily?: string; fontSize?: number; fontWeight?: string;
   align?: "left" | "center" | "right"; color?: string;
+  mirror?: "none" | "h" | "v"; mirrorAllowed?: boolean;
   shape?: "rect" | "ellipse" | "rounded"; fill?: string;
   defaultImage?: string;
   imgScale?: number;
@@ -123,7 +124,11 @@ const FONT_LABELS: Record<string, string> = {
   "'Poppins', sans-serif": "Poppins",
 };
 
-type Overrides = Record<string, { image?: string; text?: string; scale?: number; offX?: number; offY?: number }>;
+type Overrides = Record<string, { image?: string; text?: string; scale?: number; offX?: number; offY?: number; mirror?: "none" | "h" | "v" }>;
+
+function mirrorCss(mirror?: "none" | "h" | "v"): string {
+  return mirror === "h" ? " scaleX(-1)" : mirror === "v" ? " scaleY(-1)" : "";
+}
 
 export default function FrameCustomizer({ product, templates }: { product: Product; templates: Template[] }) {
   const router = useRouter();
@@ -255,6 +260,8 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
     };
     for (const el of textBoxes) {
       customizationData[el.label] = (!useDefault && overrides[el.id]?.text) || el.text || "";
+      const m = !useDefault ? (overrides[el.id]?.mirror ?? el.mirror) : el.mirror;
+      if (m && m !== "none") customizationData[`${el.label} Mirror`] = m === "h" ? "Horizontal" : "Vertical";
     }
     for (const el of imageBoxes) {
       const img = (!useDefault && overrides[el.id]?.image) || el.defaultImage;
@@ -292,10 +299,10 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
     // Customer's exact choices, keyed by element id, for faithful re-render
     const design: Record<string, unknown> = {};
     if (!useDefault) {
-      const ov: Record<string, { text?: string; image?: string; scale?: number; offX?: number; offY?: number }> = {};
+      const ov: Record<string, { text?: string; image?: string; scale?: number; offX?: number; offY?: number; mirror?: "none" | "h" | "v" }> = {};
       for (const el of [...textBoxes, ...imageBoxes]) {
         const o = overrides[el.id];
-        if (o && (o.text || o.image || o.scale != null || o.offX != null || o.offY != null)) ov[el.id] = o;
+        if (o && (o.text || o.image || o.scale != null || o.offX != null || o.offY != null || o.mirror)) ov[el.id] = o;
       }
       design.overrides = ov;
       if (frameColor) design.frameColor = frameColor;
@@ -382,11 +389,13 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
     // Customer's mirror finish wins; otherwise admin's per-element gradient
     // Priority: mirror finish > customer gradient > admin gradient
     const mirrorGradient = mirrorFinish ? MIRROR_FINISHES[mirrorFinish] : (custGrad.on ? custGradCss : grad);
+    const textMirror = overrides[el.id]?.mirror ?? el.mirror;
     return (
       <div
         key={el.id}
         style={{
           ...style,
+          transform: `rotate(${el.rotation}deg)${mirrorCss(textMirror)}`,
           fontFamily: font ?? el.fontFamily,
           fontSize: `${textSize ?? el.fontSize}px`,
           fontWeight: el.fontWeight as React.CSSProperties["fontWeight"],
@@ -841,6 +850,27 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                       </div>
                     </div>
                   )}
+                  {/* Mirror Text — only for text boxes the admin allows */}
+                  {textBoxes.filter((el) => el.mirrorAllowed).map((el) => (
+                    <div key={el.id} className="bg-white rounded-2xl shadow-sm p-4">
+                      <label className="block text-sm font-semibold text-gray-800 mb-2">🪞 Mirror — {el.label}</label>
+                      <div className="flex gap-2">
+                        {([["none", "Normal"], ["h", "↔ Flip"], ["v", "↕ Flip"]] as const).map(([m, lbl]) => {
+                          const cur = overrides[el.id]?.mirror ?? el.mirror ?? "none";
+                          return (
+                            <button
+                              key={m}
+                              onClick={() => setOverrides((p) => ({ ...p, [el.id]: { ...p[el.id], mirror: m } }))}
+                              style={{ border: "none" }}
+                              className={`flex-1 py-3 rounded-2xl text-sm font-semibold ${cur === m ? "bg-gray-900 text-amber-300" : "bg-gray-100 text-gray-700 hover:bg-amber-50"}`}
+                            >
+                              {lbl}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                   {(product.attributes?.length ?? 0) > 0 && (
                     <div className="bg-white rounded-2xl shadow-sm p-4">
                       <AttributePicker
