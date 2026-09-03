@@ -274,6 +274,39 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
       if (mirrorFinish) customizationData["Acrylic Mirror Finish"] = `${mirrorFinish} (4mm mirror, 3D raised)`;
       if (custGrad.on) customizationData["Gradient"] = `${custGrad.c1} → ${custGrad.c2}${gradAllImages ? " (all photos)" : ""}`;
     }
+
+    // ── Immutable snapshot: the exact template geometry used, so this order
+    //    never changes even if the admin edits the template later, and admin
+    //    can re-render the customer's exact final design. Keep it compact —
+    //    drop heavy embedded (data-URL) fonts; url/family fonts are kept. ──
+    const snapOptions = opts
+      ? { ...opts, customFonts: (opts.customFonts ?? []).filter((f) => f.url && !f.dataUrl) }
+      : null;
+    customizationData._snapshot = JSON.stringify({
+      name: template.name,
+      bgImage: template.bgImage,
+      aspect: opts?.bgAspect ?? 1,
+      elements: template.elements,
+      options: snapOptions,
+    });
+    // Customer's exact choices, keyed by element id, for faithful re-render
+    const design: Record<string, unknown> = {};
+    if (!useDefault) {
+      const ov: Record<string, { text?: string; image?: string; scale?: number; offX?: number; offY?: number }> = {};
+      for (const el of [...textBoxes, ...imageBoxes]) {
+        const o = overrides[el.id];
+        if (o && (o.text || o.image || o.scale != null || o.offX != null || o.offY != null)) ov[el.id] = o;
+      }
+      design.overrides = ov;
+      if (frameColor) design.frameColor = frameColor;
+      if (textColor) design.textColor = textColor;
+      if (font) design.font = font;
+      if (textSize) design.textSize = textSize;
+      if (mirrorFinish) design.mirrorFinish = mirrorFinish;
+      if (custGrad.on) design.gradient = { c1: custGrad.c1, c2: custGrad.c2, angle: custGrad.angle, allImages: gradAllImages };
+    }
+    customizationData._design = JSON.stringify(design);
+
     const existing = JSON.parse(localStorage.getItem("cart") ?? "[]");
     localStorage.setItem("cart", JSON.stringify([
       ...existing,

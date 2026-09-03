@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import OrderStatusUpdater from "./OrderStatusUpdater";
+import DesignRenderer from "@/components/DesignRenderer";
 
 export const dynamic = "force-dynamic";
 
@@ -103,7 +104,21 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
                     if (v.startsWith("http")) photoUrls.push({ label: k, url: v });
                     else if (!k.startsWith("_")) textFields.push({ label: k, value: v });
                   }
+                  // Immutable design snapshot → re-render the customer's EXACT final design
+                  let snap: { name?: string; bgImage?: string | null; aspect?: number; elements: never[]; options?: never } | null = null;
+                  let design: Record<string, never> = {};
+                  try { if (customData._snapshot) snap = JSON.parse(customData._snapshot); } catch {}
+                  try { if (customData._design) design = JSON.parse(customData._design); } catch {}
                   return (
+                    <>
+                    {snap && Array.isArray(snap.elements) && snap.elements.length > 0 && (
+                      <div className="mb-3">
+                        <p className="text-[10px] text-gray-400 mb-1 font-semibold uppercase tracking-wide">🎨 Customer&apos;s Final Design (exact)</p>
+                        <div className="max-w-[320px] rounded-xl overflow-hidden border border-gray-200">
+                          <DesignRenderer snapshot={snap} design={design} />
+                        </div>
+                      </div>
+                    )}
                     <div className="bg-gray-900 text-white rounded-xl p-4 mb-3">
                       <p className="text-xs font-bold text-amber-300 mb-2 uppercase tracking-wide">🏭 Manufacturing Details</p>
                       {textFields.length > 0 && (
@@ -137,6 +152,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
                         <p className="text-xs text-gray-400">Ready design (default) — koi custom input nahi</p>
                       )}
                     </div>
+                    </>
                   );
                 })()}
 
