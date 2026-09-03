@@ -182,19 +182,13 @@ export default function SettingsForm({ settings, razorpaySet }: { settings: Reco
         </div>
       </div>
 
-      {/* Shipping */}
+      {/* Shipping — manual (no automation) */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6">
-        <h2 className="font-semibold text-gray-900 mb-4">Shipping Charges</h2>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Free Shipping Above (₹)</label>
-            <input className={inputClass} type="number" value={form.shipping_free_above} onChange={(e) => set("shipping_free_above", e.target.value)} />
-            <p className="text-xs text-gray-400 mt-1">Orders above this amount get free shipping</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Standard Shipping Charge (₹)</label>
-            <input className={inputClass} type="number" value={form.shipping_charge} onChange={(e) => set("shipping_charge", e.target.value)} />
-          </div>
+        <h2 className="font-semibold text-gray-900 mb-1">Shipping Charge</h2>
+        <p className="text-xs text-gray-400 mb-4">Manual — jo amount yahan set karoge wahi har order pe lagega. (Product ko &ldquo;Free shipping&rdquo; mark karo to us pe 0.)</p>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Shipping Charge (₹)</label>
+          <input className={inputClass} type="number" value={form.shipping_charge} onChange={(e) => set("shipping_charge", e.target.value)} placeholder="49" />
         </div>
       </div>
 

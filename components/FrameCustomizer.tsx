@@ -214,6 +214,25 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
     setMirrorFinish(null);
   }
 
+  // Customer image fit controls — zoom + move (up/down/left/right) + reset
+  function adjustImg(elId: string, kind: "zoomIn" | "zoomOut" | "up" | "down" | "left" | "right" | "reset") {
+    setOverrides((p) => {
+      const cur = p[elId] ?? {};
+      const scale = cur.scale ?? 1, offX = cur.offX ?? 0, offY = cur.offY ?? 0;
+      let next: { scale?: number; offX?: number; offY?: number };
+      switch (kind) {
+        case "zoomIn": next = { scale: Math.min(4, scale + 0.15) }; break;
+        case "zoomOut": next = { scale: Math.max(0.5, scale - 0.15) }; break;
+        case "up": next = { offY: Math.max(-100, offY - 6) }; break;
+        case "down": next = { offY: Math.min(100, offY + 6) }; break;
+        case "left": next = { offX: Math.max(-100, offX - 6) }; break;
+        case "right": next = { offX: Math.min(100, offX + 6) }; break;
+        case "reset": next = { scale: 1, offX: 0, offY: 0 }; break;
+      }
+      return { ...p, [elId]: { ...cur, ...next } };
+    });
+  }
+
   async function uploadImage(elId: string, file: File) {
     setUploading(elId);
     const formData = new FormData();
@@ -311,7 +330,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
           {img ? (
             <div style={{ borderRadius, clipPath: clip, ...maskStyle(el.maskImage) }} className="w-full h-full overflow-hidden relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={img} alt={el.label} draggable={false} style={{ transform: `translate(${offX}%, ${offY}%) scale(${scale})` }} className={`w-full h-full ${customerUploaded ? "object-contain" : "object-cover"}`} />
+              <img src={img} alt={el.label} draggable={false} style={{ transform: `translate(${offX}%, ${offY}%) scale(${scale})` }} className="w-full h-full object-cover" />
               {(grad || custImgGrad) && <div style={{ background: custImgGrad ?? grad!, borderRadius }} className="absolute inset-0 pointer-events-none mix-blend-overlay" />}
             </div>
           ) : (
@@ -633,10 +652,37 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                           {uploading === el.id ? "Uploading..." : overrides[el.id]?.image ? "Photo lagi ✓ — change karne ke liye tap karo" : "Apni photo lagao"}
                         </span>
                       </button>
+
+                      {/* Fit controls — zoom + move, taaki photo frame me sahi baithe */}
+                      {(overrides[el.id]?.image ?? el.defaultImage) && (
+                        <div className="mt-3">
+                          <p className="text-[11px] text-gray-400 mb-2">Photo ko frame ke hisaab se set karo:</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {/* Zoom */}
+                            <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
+                              <button onClick={() => adjustImg(el.id, "zoomOut")} title="Zoom out" style={{ border: "none" }} className="w-8 h-8 rounded-lg bg-white text-gray-700 font-bold text-lg hover:bg-amber-50">−</button>
+                              <span className="text-[10px] text-gray-500 w-8 text-center">{Math.round((overrides[el.id]?.scale ?? 1) * 100)}%</span>
+                              <button onClick={() => adjustImg(el.id, "zoomIn")} title="Zoom in" style={{ border: "none" }} className="w-8 h-8 rounded-lg bg-white text-gray-700 font-bold text-lg hover:bg-amber-50">+</button>
+                            </div>
+                            {/* Move */}
+                            <div className="grid grid-cols-3 gap-0.5">
+                              <span />
+                              <button onClick={() => adjustImg(el.id, "up")} title="Up" style={{ border: "none" }} className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-amber-50 text-gray-700">↑</button>
+                              <span />
+                              <button onClick={() => adjustImg(el.id, "left")} title="Left" style={{ border: "none" }} className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-amber-50 text-gray-700">←</button>
+                              <button onClick={() => adjustImg(el.id, "reset")} title="Reset" style={{ border: "none" }} className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-amber-50 text-gray-700 text-xs">⟳</button>
+                              <button onClick={() => adjustImg(el.id, "right")} title="Right" style={{ border: "none" }} className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-amber-50 text-gray-700">→</button>
+                              <span />
+                              <button onClick={() => adjustImg(el.id, "down")} title="Down" style={{ border: "none" }} className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-amber-50 text-gray-700">↓</button>
+                              <span />
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                   {imageBoxes.length > 0 && (
-                    <p className="text-[11px] text-gray-400 text-center">Preview mein photo pe tap karke bhi change kar sakte ho • 🔵 = zoom, 🟢 = adjust</p>
+                    <p className="text-[11px] text-gray-400 text-center">Preview upar live update hota hai — zoom aur arrows se photo set karo</p>
                   )}
                 </div>
               )}
