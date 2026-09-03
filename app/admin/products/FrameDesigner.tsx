@@ -60,7 +60,21 @@ export type FrameElement = {
   maskImage?: string;
   // Frame rendered as an uploaded image (decorative border/frame PNG)
   fillImage?: string;
+  // Image box border/stroke + opacity
+  strokeOn?: boolean;
+  strokeColor?: string;
+  strokeWidth?: number;
+  strokeStyle?: "solid" | "dashed" | "dotted";
+  opacity?: number; // 0-100
 };
+
+// Border + opacity CSS for an image box
+function strokeStyleCss(el: FrameElement): React.CSSProperties {
+  const s: React.CSSProperties = {};
+  if (el.opacity != null && el.opacity < 100) s.opacity = Math.max(0, Math.min(100, el.opacity)) / 100;
+  if (el.strokeOn) s.border = `${el.strokeWidth ?? 2}px ${el.strokeStyle ?? "solid"} ${el.strokeColor ?? "#000000"}`;
+  return s;
+}
 
 // CSS to clip an element to an uploaded PNG's alpha shape
 function maskStyle(url?: string): React.CSSProperties {
@@ -493,6 +507,8 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
       touchAction: "none",
       // element's own shadow (boxes only; text shadow applied on the span)
       ...(el.type !== "text" ? shadowCss(el) : {}),
+      // image box stroke/border + opacity
+      ...(el.type === "image" ? strokeStyleCss(el) : {}),
     };
     const grad = gradientCss(el);
     const clip = el.type === "image" ? clipPathCss(el.clipShape, el.clipPoints) : undefined;
@@ -878,6 +894,41 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
                         ✕ Remove
                       </button>
                     )}
+                  </div>
+
+                  {/* Border / Stroke */}
+                  <div className="mt-2 border-t border-gray-100 pt-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={selected.strokeOn ?? false} onChange={(e) => updateSelected({ strokeOn: e.target.checked, ...(e.target.checked && selected.strokeColor === undefined ? { strokeColor: "#000000", strokeWidth: 2, strokeStyle: "solid" as const } : {}) })} className="w-3.5 h-3.5 accent-orange-500" />
+                      <span className="font-bold text-gray-800">▢ Border / Stroke</span>
+                    </label>
+                    {selected.strokeOn && (
+                      <div className="mt-2 space-y-2 pl-5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-500 w-12 shrink-0">Color</span>
+                          <input type="color" value={selected.strokeColor ?? "#000000"} onChange={(e) => updateSelected({ strokeColor: e.target.value })} className="w-8 h-7 rounded border border-gray-200 cursor-pointer p-0" />
+                          <input className={inputClass + " flex-1 font-mono"} value={selected.strokeColor ?? "#000000"} onChange={(e) => updateSelected({ strokeColor: e.target.value })} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-gray-500 mb-0.5">Width</label>
+                            <input type="number" min={0} max={40} className={inputClass} value={selected.strokeWidth ?? 2} onChange={(e) => updateSelected({ strokeWidth: Number(e.target.value) })} />
+                          </div>
+                          <div>
+                            <label className="block text-gray-500 mb-0.5">Style</label>
+                            <select className={inputClass + " bg-white"} value={selected.strokeStyle ?? "solid"} onChange={(e) => updateSelected({ strokeStyle: e.target.value as "solid" | "dashed" | "dotted" })}>
+                              <option value="solid">Solid</option>
+                              <option value="dashed">Dashed</option>
+                              <option value="dotted">Dotted</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <div className="mt-2">
+                      <label className="block text-gray-500 mb-0.5">Opacity: {selected.opacity ?? 100}%</label>
+                      <input type="range" min={10} max={100} value={selected.opacity ?? 100} onChange={(e) => updateSelected({ opacity: Number(e.target.value) })} className="w-full accent-orange-500" />
+                    </div>
                   </div>
 
                   <label className="block text-gray-500 mb-0.5 mt-2">Default Image (JPEG/PNG — customer change kar sakta hai)</label>

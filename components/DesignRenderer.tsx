@@ -18,6 +18,7 @@ type El = {
   gradOn?: boolean; gradColor1?: string; gradColor2?: string; gradAngle?: number; gradIntensity?: number;
   clipShape?: import("@/lib/clipShapes").ClipShape; clipPoints?: import("@/lib/clipShapes").ClipPoint[];
   maskImage?: string; fillImage?: string;
+  strokeOn?: boolean; strokeColor?: string; strokeWidth?: number; strokeStyle?: "solid" | "dashed" | "dotted"; opacity?: number;
 };
 
 type Snapshot = { name?: string; bgImage?: string | null; aspect?: number; elements: El[]; options?: { customFonts?: { family: string; url?: string }[] } | null };
@@ -56,6 +57,12 @@ function maskStyle(url?: string): React.CSSProperties {
 function mirrorCss(mirror?: "none" | "h" | "v"): string {
   return mirror === "h" ? " scaleX(-1)" : mirror === "v" ? " scaleY(-1)" : "";
 }
+function strokeStyleCss(el: El): React.CSSProperties {
+  const s: React.CSSProperties = {};
+  if (el.opacity != null && el.opacity < 100) s.opacity = Math.max(0, Math.min(100, el.opacity)) / 100;
+  if (el.strokeOn) s.border = `${el.strokeWidth ?? 2}px ${el.strokeStyle ?? "solid"} ${el.strokeColor ?? "#000000"}`;
+  return s;
+}
 
 export default function DesignRenderer({ snapshot, design, className = "" }: { snapshot: Snapshot; design: Design; className?: string }) {
   const els = [...(snapshot.elements ?? [])].sort((a, b) => a.z - b.z);
@@ -69,6 +76,7 @@ export default function DesignRenderer({ snapshot, design, className = "" }: { s
       position: "absolute", left: `${el.x}%`, top: `${el.y}%`, width: `${el.w}%`, height: `${el.h}%`,
       transform: `rotate(${el.rotation}deg)`, zIndex: el.z, borderRadius,
       ...(el.type !== "text" ? shadowCss(el) : {}),
+      ...(el.type === "image" ? strokeStyleCss(el) : {}),
     };
     const adminGrad = gradientCss(el);
 

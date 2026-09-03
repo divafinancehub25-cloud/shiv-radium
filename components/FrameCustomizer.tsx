@@ -40,7 +40,15 @@ type FrameElement = {
   clipPoints?: import("@/lib/clipShapes").ClipPoint[];
   maskImage?: string;
   fillImage?: string;
+  strokeOn?: boolean; strokeColor?: string; strokeWidth?: number; strokeStyle?: "solid" | "dashed" | "dotted"; opacity?: number;
 };
+
+function strokeStyleCss(el: FrameElement): React.CSSProperties {
+  const s: React.CSSProperties = {};
+  if (el.opacity != null && el.opacity < 100) s.opacity = Math.max(0, Math.min(100, el.opacity)) / 100;
+  if (el.strokeOn) s.border = `${el.strokeWidth ?? 2}px ${el.strokeStyle ?? "solid"} ${el.strokeColor ?? "#000000"}`;
+  return s;
+}
 
 // Clip an element to an uploaded PNG's alpha shape
 function maskStyle(url?: string): React.CSSProperties {
@@ -340,6 +348,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
       left: `${el.x}%`, top: `${el.y}%`, width: `${el.w}%`, height: `${el.h}%`,
       transform: `rotate(${el.rotation}deg)`, zIndex: el.z, borderRadius,
       ...(el.type !== "text" ? shadowCss(el) : {}),
+      ...(el.type === "image" ? strokeStyleCss(el) : {}),
     };
     // Admin per-element gradient, plus optional customer gradient
     const adminGrad = gradientCss(el);
