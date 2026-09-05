@@ -66,6 +66,8 @@ export type FrameElement = {
   strokeWidth?: number;
   strokeStyle?: "solid" | "dashed" | "dotted";
   opacity?: number; // 0-100
+  locked?: boolean;  // designer: can't move/resize
+  hidden?: boolean;  // hidden everywhere (designer shows faded)
 };
 
 // Border + opacity CSS for an image box
@@ -416,8 +418,22 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
     const el = elements.find((x) => x.id === id);
     if (!el) return;
     setSelectedId(id);
+    if (el.locked && (mode === "move" || mode === "resize")) return; // locked = no move/resize
     dragRef.current = { id, mode, startX: e.clientX, startY: e.clientY, orig: { ...el } };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  // Align the selected element within the canvas
+  function alignSelected(dir: "left" | "hcenter" | "right" | "top" | "vmiddle" | "bottom") {
+    if (!selected) return;
+    const patch: Partial<FrameElement> = {};
+    if (dir === "left") patch.x = 0;
+    else if (dir === "hcenter") patch.x = (100 - selected.w) / 2;
+    else if (dir === "right") patch.x = 100 - selected.w;
+    else if (dir === "top") patch.y = 0;
+    else if (dir === "vmiddle") patch.y = (100 - selected.h) / 2;
+    else if (dir === "bottom") patch.y = 100 - selected.h;
+    updateSelected(patch);
   }
 
   function onPointerMove(e: React.PointerEvent) {
@@ -510,6 +526,8 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
       // image box stroke/border + opacity
       ...(el.type === "image" ? strokeStyleCss(el) : {}),
     };
+    // Hidden elements show faded in the designer (skipped for customer/order)
+    if (el.hidden) common.opacity = 0.25;
     const grad = gradientCss(el);
     const clip = el.type === "image" ? clipPathCss(el.clipShape, el.clipPoints) : undefined;
     return (
@@ -781,6 +799,20 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
                 </div>
               </div>
 
+              {/* Alignment + Lock/Hide */}
+              <div>
+                <label className="block text-gray-500 mb-0.5">Align in canvas</label>
+                <div className="grid grid-cols-3 gap-1">
+                  {([["left", "⬅"], ["hcenter", "↔"], ["right", "➡"], ["top", "⬆"], ["vmiddle", "↕"], ["bottom", "⬇"]] as const).map(([d, ic]) => (
+                    <button key={d} onClick={() => alignSelected(d)} title={d} className="border border-gray-200 rounded-lg py-1.5 hover:bg-orange-50">{ic}</button>
+                  ))}
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={() => updateSelected({ hidden: !selected.hidden })} className={`flex-1 border rounded-lg py-1.5 ${selected.hidden ? "border-orange-500 bg-orange-50 text-orange-600" : "border-gray-200"}`}>{selected.hidden ? "🚫 Hidden" : "👁 Visible"}</button>
+                  <button onClick={() => updateSelected({ locked: !selected.locked })} className={`flex-1 border rounded-lg py-1.5 ${selected.locked ? "border-orange-500 bg-orange-50 text-orange-600" : "border-gray-200"}`}>{selected.locked ? "🔒 Locked" : "🔓 Unlocked"}</button>
+                </div>
+              </div>
+
               {/* ── Shadow (per-element) ── */}
               <div className="border-t border-gray-100 pt-2">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -1041,15 +1073,17 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
               <p className="text-[10px] font-semibold text-gray-500 mb-1">Layers ({elements.length})</p>
               <div className="space-y-1 max-h-36 overflow-y-auto">
                 {[...elements].sort((a, b) => b.z - a.z).map((el) => (
-                  <button
+                  <div
                     key={el.id}
-                    onClick={() => setSelectedId(el.id)}
-                    className={`w-full flex items-center gap-2 px-2 py-1 rounded-lg text-left ${selectedId === el.id ? "bg-orange-50 text-orange-600 font-semibold" : "hover:bg-gray-50 text-gray-600"}`}
+                    className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-lg ${selectedId === el.id ? "bg-orange-50 text-orange-600 font-semibold" : "hover:bg-gray-50 text-gray-600"}`}
                   >
-                    {el.type === "image" ? <ImageIcon className="w-3 h-3" /> : el.type === "text" ? <Type className="w-3 h-3" /> : <Square className="w-3 h-3" />}
-                    <span className="truncate flex-1">{el.label}</span>
-                    <span className="text-[9px] text-gray-400">z{el.z}</span>
-                  </button>
+                    <button onClick={() => setSelectedId(el.id)} className="flex items-center gap-2 flex-1 min-w-0 text-left">
+                      {el.type === "image" ? <ImageIcon className="w-3 h-3" /> : el.type === "text" ? <Type className="w-3 h-3" /> : <Square className="w-3 h-3" />}
+                      <span className={`truncate flex-1 ${el.hidden ? "line-through opacity-50" : ""}`}>{el.label}</span>
+                    </button>
+                    <button onClick={() => setElements((p) => p.map((x) => x.id === el.id ? { ...x, hidden: !x.hidden } : x))} title={el.hidden ? "Show" : "Hide"} className="text-gray-400 hover:text-gray-700 text-[11px]">{el.hidden ? "🚫" : "👁"}</button>
+                    <button onClick={() => setElements((p) => p.map((x) => x.id === el.id ? { ...x, locked: !x.locked } : x))} title={el.locked ? "Unlock" : "Lock"} className="text-gray-400 hover:text-gray-700 text-[11px]">{el.locked ? "🔒" : "🔓"}</button>
+                  </div>
                 ))}
               </div>
             </div>

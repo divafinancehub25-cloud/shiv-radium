@@ -212,7 +212,8 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
   const custGrad = { on: gradOn && !!adminGradientCfg?.enabled, c1: adminGradientCfg?.c1 ?? "#d4af37", c2: adminGradientCfg?.c2 ?? "#f7e28f", angle: adminGradientCfg?.angle ?? 135 };
   const gradAllImages = !!adminGradientCfg?.allImages;
   const custGradCss = `linear-gradient(${custGrad.angle}deg, ${custGrad.c1} 0%, ${custGrad.c2} 100%)`;
-  const elements = [...template.elements].sort((a, b) => a.z - b.z);
+  // Skip admin-hidden elements everywhere (preview, options, cart, order)
+  const elements = [...template.elements].filter((e) => !(e as { hidden?: boolean }).hidden).sort((a, b) => a.z - b.z);
   const imageBoxes = elements.filter((e) => e.type === "image");
   const textBoxes = elements.filter((e) => e.type === "text");
 

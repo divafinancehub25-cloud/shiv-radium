@@ -19,6 +19,7 @@ type El = {
   clipShape?: import("@/lib/clipShapes").ClipShape; clipPoints?: import("@/lib/clipShapes").ClipPoint[];
   maskImage?: string; fillImage?: string;
   strokeOn?: boolean; strokeColor?: string; strokeWidth?: number; strokeStyle?: "solid" | "dashed" | "dotted"; opacity?: number;
+  locked?: boolean; hidden?: boolean;
 };
 
 type Snapshot = { name?: string; bgImage?: string | null; aspect?: number; elements: El[]; options?: { customFonts?: { family: string; url?: string }[] } | null };
@@ -65,7 +66,7 @@ function strokeStyleCss(el: El): React.CSSProperties {
 }
 
 export default function DesignRenderer({ snapshot, design, className = "" }: { snapshot: Snapshot; design: Design; className?: string }) {
-  const els = [...(snapshot.elements ?? [])].sort((a, b) => a.z - b.z);
+  const els = [...(snapshot.elements ?? [])].filter((e) => !e.hidden).sort((a, b) => a.z - b.z);
   const ov = design.overrides ?? {};
   const custGrad = design.gradient ? `linear-gradient(${design.gradient.angle}deg, ${design.gradient.c1} 0%, ${design.gradient.c2} 100%)` : null;
   const fonts = (snapshot.options?.customFonts ?? []).filter((f) => f.url);
