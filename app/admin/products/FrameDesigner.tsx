@@ -135,6 +135,8 @@ export type CustomerOptions = {
   acrylicMirror?: { enabled: boolean; allowed: string[]; default: string };
   // Customer gradient: admin sets the colours; customer only gets an ON/OFF switch
   gradient?: { enabled: boolean; c1: string; c2: string; angle: number; allImages: boolean };
+  // Light ON/OFF — LED-style glow the customer can toggle
+  light?: { enabled: boolean; defaultOn: boolean; color: string; intensity: number };
 };
 
 // Acrylic mirror finishes — premium 4mm mirror look with 3D raised text
@@ -168,6 +170,7 @@ function defaultOptions(): CustomerOptions {
     bgAspect: 4 / 3,
     acrylicMirror: { enabled: false, allowed: ACRYLIC_MIRROR_COLORS.map((c) => c.label), default: "Normal Gold" },
     gradient: { enabled: false, c1: "#d4af37", c2: "#f7e28f", angle: 135, allImages: false },
+    light: { enabled: false, defaultOn: false, color: "#fff2c2", intensity: 55 },
   };
 }
 
@@ -311,7 +314,7 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
     setTemplateName(t.name);
     setElements(t.elements);
     setBgImage(t.bgImage ?? productImage);
-    setOptions({ ...defaultOptions(), ...(t.options ?? {}), acrylicMirror: { ...defaultOptions().acrylicMirror!, ...(t.options?.acrylicMirror ?? {}) }, gradient: { ...defaultOptions().gradient!, ...(t.options?.gradient ?? {}) } });
+    setOptions({ ...defaultOptions(), ...(t.options ?? {}), acrylicMirror: { ...defaultOptions().acrylicMirror!, ...(t.options?.acrylicMirror ?? {}) }, gradient: { ...defaultOptions().gradient!, ...(t.options?.gradient ?? {}) }, light: { ...defaultOptions().light!, ...(t.options?.light ?? {}) } });
     setSelectedId(null);
   }
 
@@ -1341,6 +1344,35 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
                   <input type="checkbox" checked={options.gradient.allImages} onChange={(e) => setOptions((o) => ({ ...o, gradient: { ...o.gradient!, allImages: e.target.checked } }))} className="w-3.5 h-3.5 accent-orange-500" />
                   Saari photos pe bhi gradient lagao (text ke saath)
                 </label>
+              </div>
+            )}
+          </div>
+
+          {/* Light ON/OFF — LED-style glow */}
+          <div className="border border-gray-200 rounded-xl p-4 md:col-span-2">
+            <label className="flex items-center gap-2 cursor-pointer mb-2">
+              <input
+                type="checkbox"
+                checked={options.light?.enabled ?? false}
+                onChange={(e) => setOptions((o) => ({ ...o, light: { ...(o.light ?? { defaultOn: false, color: "#fff2c2", intensity: 55 }), enabled: e.target.checked } }))}
+                className="w-4 h-4 accent-orange-500"
+              />
+              <span className="text-xs font-bold text-gray-800">💡 Light ON/OFF — customer ko LED glow toggle do</span>
+            </label>
+            {options.light?.enabled && (
+              <div className="pl-6 grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+                <label className="flex items-center gap-2 cursor-pointer text-[11px] text-gray-600">
+                  <input type="checkbox" checked={options.light.defaultOn} onChange={(e) => setOptions((o) => ({ ...o, light: { ...o.light!, defaultOn: e.target.checked } }))} className="w-3.5 h-3.5 accent-orange-500" />
+                  Default ON
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-gray-500">Glow color</span>
+                  <input type="color" value={options.light.color} onChange={(e) => setOptions((o) => ({ ...o, light: { ...o.light!, color: e.target.value } }))} className="w-8 h-7 rounded border border-gray-200 cursor-pointer p-0" />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-gray-500 mb-0.5">Intensity: {options.light.intensity}%</label>
+                  <input type="range" min={10} max={100} value={options.light.intensity} onChange={(e) => setOptions((o) => ({ ...o, light: { ...o.light!, intensity: Number(e.target.value) } }))} className="w-full accent-orange-500" />
+                </div>
               </div>
             )}
           </div>

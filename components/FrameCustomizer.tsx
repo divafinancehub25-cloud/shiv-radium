@@ -91,6 +91,7 @@ type CustomerOptions = {
   bgAspect?: number;
   acrylicMirror?: { enabled: boolean; allowed: string[]; default: string };
   gradient?: { enabled: boolean; c1: string; c2: string; angle: number; allImages: boolean };
+  light?: { enabled: boolean; defaultOn: boolean; color: string; intensity: number };
 };
 
 // Acrylic mirror finishes (must match admin FrameDesigner list)
@@ -163,6 +164,11 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
   // Customer only toggles the admin-defined gradient ON/OFF (config read below,
   // after `template` is defined)
   const [gradOn, setGradOn] = useState(false);
+  const adminLightCfg = templates[activeIdx]?.options?.light;
+  const [lightOn, setLightOn] = useState(!!adminLightCfg?.defaultOn);
+  const lightOverlay = adminLightCfg?.enabled && lightOn
+    ? `radial-gradient(ellipse at 50% 45%, ${adminLightCfg.color}, transparent 72%)`
+    : null;
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const canvasRef = useRef<HTMLDivElement>(null);
   const scaleDragRef = useRef<{ elId: string; mode: "scale" | "pan"; startX: number; startY: number; origScale: number; origX: number; origY: number; elW: number; elH: number } | null>(null);
@@ -226,6 +232,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
     setTextSize(null);
     setGradOn(false);
     setMirrorFinish(null);
+    setLightOn(!!templates[i]?.options?.light?.defaultOn);
   }
 
   // Customer image fit controls — zoom + move (up/down/left/right) + reset
@@ -320,7 +327,9 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
       if (textSize) design.textSize = textSize;
       if (mirrorFinish) design.mirrorFinish = mirrorFinish;
       if (custGrad.on) design.gradient = { c1: custGrad.c1, c2: custGrad.c2, angle: custGrad.angle, allImages: gradAllImages };
+      if (adminLightCfg?.enabled && lightOn) design.light = { color: adminLightCfg.color, intensity: adminLightCfg.intensity };
     }
+    if (adminLightCfg?.enabled) customizationData["Light"] = (!useDefault && lightOn) || (useDefault && adminLightCfg.defaultOn) ? "ON" : "OFF";
     customizationData._design = JSON.stringify(design);
 
     const existing = JSON.parse(localStorage.getItem("cart") ?? "[]");
@@ -647,6 +656,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                 }}
               >
                 {elements.map(renderElement)}
+                {lightOverlay && <div className="absolute inset-0 pointer-events-none z-40" style={{ background: lightOverlay, opacity: (adminLightCfg!.intensity ?? 55) / 100, mixBlendMode: "screen" }} />}
                 <div className="absolute top-3 left-3 bg-gray-900/80 text-amber-300 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider z-50">
                   ● Live Preview
                 </div>
@@ -802,6 +812,28 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                   )}
 
                   {/* Gradient — only a single ON/OFF switch (admin sets colours) */}
+                  {/* Light ON/OFF — LED glow */}
+                  {adminLightCfg?.enabled && (
+                    <div className="bg-white rounded-2xl shadow-sm p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="w-8 h-8 rounded-full shrink-0" style={{ background: `radial-gradient(circle, ${adminLightCfg.color}, #bbb)` }} />
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-800">💡 Light</label>
+                            <p className="text-[11px] text-gray-400">LED glow ON/OFF</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setLightOn((v) => !v)}
+                          style={{ border: "none" }}
+                          className={`w-14 h-7 rounded-full transition-colors relative ${lightOn ? "bg-gray-900" : "bg-gray-200"}`}
+                        >
+                          <span className={`absolute top-1 w-5 h-5 rounded-full transition-all ${lightOn ? "left-8 bg-amber-300" : "left-1 bg-white"}`} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {adminGradientCfg?.enabled && (
                     <div className="bg-white rounded-2xl shadow-sm p-4">
                       <div className="flex items-center justify-between">

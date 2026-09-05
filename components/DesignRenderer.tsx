@@ -27,6 +27,7 @@ type Design = {
   overrides?: Record<string, { text?: string; image?: string; scale?: number; offX?: number; offY?: number; mirror?: "none" | "h" | "v" }>;
   frameColor?: string; textColor?: string; font?: string; textSize?: number;
   mirrorFinish?: string; gradient?: { c1: string; c2: string; angle: number; allImages: boolean };
+  light?: { color: string; intensity: number };
 };
 
 const MIRROR_FINISHES: Record<string, string> = {
@@ -147,6 +148,9 @@ export default function DesignRenderer({ snapshot, design, className = "" }: { s
         <link key={f.url} href={f.url} rel="stylesheet" />
       ))}
       {els.map(render)}
+      {design.light && (
+        <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(ellipse at 50% 45%, ${design.light.color}, transparent 72%)`, opacity: (design.light.intensity ?? 55) / 100, mixBlendMode: "screen", zIndex: 999 }} />
+      )}
     </div>
   );
 }
