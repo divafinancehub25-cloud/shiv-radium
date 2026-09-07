@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import OrderStatusUpdater from "./OrderStatusUpdater";
 import DesignRenderer from "@/components/DesignRenderer";
+import PrintOrderButton from "./PrintOrderButton";
 
 export const dynamic = "force-dynamic";
 
@@ -19,18 +20,24 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
 
   return (
     <div className="p-6">
-      <Link href="/admin/orders" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-orange-500 mb-5 transition-colors">
-        <ArrowLeft className="w-4 h-4" /> Back to Orders
-      </Link>
+      <style>{`@media print { .no-print { display: none !important; } aside, nav, header { display: none !important; } main { margin: 0 !important; } }`}</style>
+      <div className="no-print">
+        <Link href="/admin/orders" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-orange-500 mb-5 transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Back to Orders
+        </Link>
+      </div>
 
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-start justify-between mb-6 gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{order.orderNumber}</h1>
           <p className="text-gray-500 text-sm mt-1">
             Placed on {new Date(order.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}
           </p>
         </div>
-        <OrderStatusUpdater orderId={order.id} currentStatus={order.status} currentPayment={order.paymentStatus} currentCourier={order.courierName ?? ""} currentTracking={order.trackingNumber ?? ""} currentGstNumber={order.gstNumber ?? ""} currentGstRate={order.gstRate?.toString() ?? ""} orderNumber={order.orderNumber} />
+        <div className="flex flex-col items-end gap-2">
+          <PrintOrderButton />
+          <OrderStatusUpdater orderId={order.id} currentStatus={order.status} currentPayment={order.paymentStatus} currentCourier={order.courierName ?? ""} currentTracking={order.trackingNumber ?? ""} currentGstNumber={order.gstNumber ?? ""} currentGstRate={order.gstRate?.toString() ?? ""} orderNumber={order.orderNumber} />
+        </div>
       </div>
 
       <div className="grid md:grid-cols-3 gap-5">
