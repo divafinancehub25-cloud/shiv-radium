@@ -27,6 +27,14 @@ export default async function ReferralsPage() {
         <p className="text-sm text-white/40 mt-1">Invite friends to STICKO and earn rewards together</p>
       </div>
 
+      {/* Offer banner */}
+      <div className="rounded-2xl border border-[#D4AF37]/30 bg-gradient-to-br from-[#D4AF37]/[0.10] to-transparent p-5">
+        <p className="text-lg font-bold text-white">Earn <span className="text-[#D4AF37]">10% bonus</span> on every referral</p>
+        <p className="text-sm text-white/50 mt-1">
+          When someone you refer makes a deposit, you get <strong className="text-white/80">10% of their deposit</strong> added to your balance — for your first <strong className="text-white/80">10 referrals</strong>. Share your link below.
+        </p>
+      </div>
+
       {/* Referral Card */}
       {stats && (
         <GlassCard className="p-6 relative overflow-hidden">

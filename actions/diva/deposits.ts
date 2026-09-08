@@ -170,6 +170,7 @@ export async function reviewDeposit(data: unknown) {
   const { depositId, action, adminNotes } = parsed.data;
 
   // Run deposit update + optional portfolio credit in one transaction
+  let referralBonus: { referrerId: string; amount: number } | null = null;
   const deposit = await prisma.$transaction(async (tx) => {
     const updated = await tx.divaDeposit.update({
       where: { id: depositId },
@@ -193,10 +194,51 @@ export async function reviewDeposit(data: unknown) {
         createdBy: session.user.id,
         tx,
       });
+
+      // ── Referral bonus: 10% of this deposit to the referrer, for the
+      //    referrer's first 10 referrals only, once per referred user. ──
+      const referral = await tx.divaReferral.findFirst({
+        where: { referredId: updated.userId, status: { not: "ACTIVATED" } },
+      });
+      if (referral) {
+        const alreadyRewarded = await tx.divaReferral.count({
+          where: { referrerId: referral.referrerId, status: "ACTIVATED" },
+        });
+        if (alreadyRewarded < 10) {
+          const bonus = Number(updated.amount) * 0.1;
+          await creditPortfolio({
+            userId: referral.referrerId,
+            amount: bonus,
+            transactionType: "ADMIN_CREDIT",
+            referenceType: "ReferralBonus",
+            referenceId: referral.id,
+            notes: `Referral bonus — 10% of ${updated.user?.name ?? "your referral"}'s deposit`,
+            createdBy: session.user.id,
+            tx,
+          });
+          await tx.divaReferral.update({
+            where: { id: referral.id },
+            data: { status: "ACTIVATED" },
+          });
+          referralBonus = { referrerId: referral.referrerId, amount: bonus };
+        }
+      }
     }
 
     return updated;
   });
+
+  // Notify the referrer about their bonus (outside the transaction)
+  if (referralBonus) {
+    const rb: { referrerId: string; amount: number } = referralBonus;
+    await createNotification({
+      userId: rb.referrerId,
+      title: "Referral Bonus Earned 🎉",
+      message: `You earned $${rb.amount.toFixed(2)} (10%) because someone you referred made a deposit.`,
+      type: "success",
+      link: "/diva-app/referrals",
+    });
+  }
 
   const auditAction =
     action === "APPROVED"
