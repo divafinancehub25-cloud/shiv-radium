@@ -243,7 +243,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
       let next: { scale?: number; offX?: number; offY?: number };
       switch (kind) {
         case "zoomIn": next = { scale: Math.min(4, scale + 0.15) }; break;
-        case "zoomOut": next = { scale: Math.max(0.5, scale - 0.15) }; break;
+        case "zoomOut": next = { scale: Math.max(0.3, scale - 0.15) }; break;
         case "up": next = { offY: Math.max(-100, offY - 6) }; break;
         case "down": next = { offY: Math.min(100, offY + 6) }; break;
         case "left": next = { offX: Math.max(-100, offX - 6) }; break;
@@ -719,6 +719,17 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                       {(overrides[el.id]?.image ?? el.defaultImage) && (
                         <div className="mt-3">
                           <p className="text-[11px] text-gray-400 mb-2">Photo ko frame ke hisaab se set karo:</p>
+                          {/* Smooth zoom slider — admin ki tarah (0.3×–4×) */}
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-[10px] text-gray-500 shrink-0">Zoom</span>
+                            <input
+                              type="range" min={0.3} max={4} step={0.05}
+                              value={overrides[el.id]?.scale ?? el.imgScale ?? 1}
+                              onChange={(e) => setOverrides((p) => ({ ...p, [el.id]: { ...p[el.id], scale: Number(e.target.value) } }))}
+                              className="flex-1 accent-amber-500"
+                            />
+                            <span className="text-[10px] font-semibold w-9 text-right text-gray-600">{Math.round((overrides[el.id]?.scale ?? el.imgScale ?? 1) * 100)}%</span>
+                          </div>
                           <div className="flex items-center gap-2 flex-wrap">
                             {/* Zoom */}
                             <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
