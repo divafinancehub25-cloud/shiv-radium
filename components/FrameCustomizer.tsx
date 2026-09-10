@@ -391,6 +391,27 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={img} alt={el.label} draggable={false} style={{ transform: `translate(${offX}%, ${offY}%) scale(${scale})` }} className="w-full h-full object-cover" />
               {(grad || custImgGrad) && <div style={{ background: custImgGrad ?? grad!, borderRadius }} className="absolute inset-0 pointer-events-none mix-blend-overlay" />}
+              {/* Admin jaise direct-drag handles — photo ko seedha preview pe set karo */}
+              {customizing && (
+                <>
+                  <div
+                    onPointerDown={(e) => startImgDrag(el, "pan", e)}
+                    onPointerMove={onScaleDragMove}
+                    onPointerUp={endScaleDrag}
+                    onClick={(e) => e.stopPropagation()}
+                    title="Move — photo ko pakadke idhar-udhar karo"
+                    className="absolute bottom-1 left-1 w-5 h-5 bg-green-500 border-2 border-white rounded-full shadow cursor-move touch-none"
+                  />
+                  <div
+                    onPointerDown={(e) => startImgDrag(el, "scale", e)}
+                    onPointerMove={onScaleDragMove}
+                    onPointerUp={endScaleDrag}
+                    onClick={(e) => e.stopPropagation()}
+                    title="Zoom — drag karke chhota/bada karo"
+                    className="absolute bottom-1 right-1 w-5 h-5 bg-blue-500 border-2 border-white rounded-full shadow cursor-ew-resize touch-none"
+                  />
+                </>
+              )}
             </div>
           ) : (
             <div style={{ borderRadius, clipPath: clip, ...maskStyle(el.maskImage) }} className="w-full h-full bg-gray-100/80 flex items-center justify-center">
