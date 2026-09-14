@@ -170,47 +170,6 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
     ? `radial-gradient(ellipse at 50% 45%, ${adminLightCfg.color}, transparent 72%)`
     : null;
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
-  const canvasRef = useRef<HTMLDivElement>(null);
-  const scaleDragRef = useRef<{ elId: string; mode: "scale" | "pan"; startX: number; startY: number; origScale: number; origX: number; origY: number; elW: number; elH: number } | null>(null);
-
-  function startImgDrag(el: FrameElement, mode: "scale" | "pan", e: React.PointerEvent) {
-    e.stopPropagation();
-    e.preventDefault();
-    const o = overrides[el.id];
-    scaleDragRef.current = {
-      elId: el.id, mode, startX: e.clientX, startY: e.clientY,
-      origScale: o?.scale ?? el.imgScale ?? 1,
-      origX: o?.offX ?? el.imgX ?? 0,
-      origY: o?.offY ?? el.imgY ?? 0,
-      elW: el.w, elH: el.h,
-    };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  }
-
-  function onScaleDragMove(e: React.PointerEvent) {
-    const d = scaleDragRef.current;
-    if (!d || !canvasRef.current) return;
-    const r = canvasRef.current.getBoundingClientRect();
-    const dx = ((e.clientX - d.startX) / r.width) * 100;
-    const dy = ((e.clientY - d.startY) / r.height) * 100;
-    if (d.mode === "scale") {
-      setOverrides((p) => ({ ...p, [d.elId]: { ...p[d.elId], scale: Math.max(0.3, Math.min(4, d.origScale + dx / 30)) } }));
-    } else {
-      setOverrides((p) => ({
-        ...p,
-        [d.elId]: {
-          ...p[d.elId],
-          offX: Math.max(-100, Math.min(100, d.origX + (dx / d.elW) * 100)),
-          offY: Math.max(-100, Math.min(100, d.origY + (dy / d.elH) * 100)),
-        },
-      }));
-    }
-  }
-
-  function endScaleDrag() {
-    scaleDragRef.current = null;
-  }
-
   const template = templates[activeIdx];
   const opts = template.options;
   // Admin-defined gradient config; customer only flips gradOn
@@ -235,24 +194,6 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
     setLightOn(!!templates[i]?.options?.light?.defaultOn);
   }
 
-  // Customer image fit controls — zoom + move (up/down/left/right) + reset
-  function adjustImg(elId: string, kind: "zoomIn" | "zoomOut" | "up" | "down" | "left" | "right" | "reset") {
-    setOverrides((p) => {
-      const cur = p[elId] ?? {};
-      const scale = cur.scale ?? 1, offX = cur.offX ?? 0, offY = cur.offY ?? 0;
-      let next: { scale?: number; offX?: number; offY?: number };
-      switch (kind) {
-        case "zoomIn": next = { scale: Math.min(4, scale + 0.15) }; break;
-        case "zoomOut": next = { scale: Math.max(0.3, scale - 0.15) }; break;
-        case "up": next = { offY: Math.max(-100, offY - 6) }; break;
-        case "down": next = { offY: Math.min(100, offY + 6) }; break;
-        case "left": next = { offX: Math.max(-100, offX - 6) }; break;
-        case "right": next = { offX: Math.min(100, offX + 6) }; break;
-        case "reset": next = { scale: 1, offX: 0, offY: 0 }; break;
-      }
-      return { ...p, [elId]: { ...cur, ...next } };
-    });
-  }
 
   async function uploadImage(elId: string, file: File) {
     setUploading(elId);
@@ -261,7 +202,8 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
     const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
     const data = await res.json();
     if (res.ok && data.url) {
-      setOverrides((p) => ({ ...p, [elId]: { ...p[elId], image: data.url } }));
+      // Cropped image already matches the box ratio → neutral transform (no post-crop nudging)
+      setOverrides((p) => ({ ...p, [elId]: { ...p[elId], image: data.url, scale: 1, offX: 0, offY: 0 } }));
     }
     setUploading(null);
   }
@@ -391,27 +333,6 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={img} alt={el.label} draggable={false} style={{ transform: `translate(${offX}%, ${offY}%) scale(${scale})` }} className="w-full h-full object-cover" />
               {(grad || custImgGrad) && <div style={{ background: custImgGrad ?? grad!, borderRadius }} className="absolute inset-0 pointer-events-none mix-blend-overlay" />}
-              {/* Admin jaise direct-drag handles — photo ko seedha preview pe set karo */}
-              {customizing && (
-                <>
-                  <div
-                    onPointerDown={(e) => startImgDrag(el, "pan", e)}
-                    onPointerMove={onScaleDragMove}
-                    onPointerUp={endScaleDrag}
-                    onClick={(e) => e.stopPropagation()}
-                    title="Move — photo ko pakadke idhar-udhar karo"
-                    className="absolute bottom-1 left-1 w-5 h-5 bg-green-500 border-2 border-white rounded-full shadow cursor-move touch-none"
-                  />
-                  <div
-                    onPointerDown={(e) => startImgDrag(el, "scale", e)}
-                    onPointerMove={onScaleDragMove}
-                    onPointerUp={endScaleDrag}
-                    onClick={(e) => e.stopPropagation()}
-                    title="Zoom — drag karke chhota/bada karo"
-                    className="absolute bottom-1 right-1 w-5 h-5 bg-blue-500 border-2 border-white rounded-full shadow cursor-ew-resize touch-none"
-                  />
-                </>
-              )}
             </div>
           ) : (
             <div style={{ borderRadius, clipPath: clip, ...maskStyle(el.maskImage) }} className="w-full h-full bg-gray-100/80 flex items-center justify-center">
@@ -501,8 +422,9 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
-              // Direct upload — no forced crop, poori image dikhegi (top/bottom cut nahi)
-              if (file) uploadImage(el.id, file);
+              // Open the crop editor — position/zoom chosen there, then uploaded.
+              // aspect = box ratio in canvas space (matches Admin: w/h × bgAspect)
+              if (file) setCropState({ file, elId: el.id, aspect: (el.w / el.h) * (opts?.bgAspect || 1) });
               e.target.value = "";
             }}
           />
@@ -664,10 +586,6 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
 
               {/* LIVE PREVIEW — type karte hi yahan update hota hai */}
               <div
-                ref={canvasRef}
-                onPointerMove={onScaleDragMove}
-                onPointerUp={endScaleDrag}
-                onPointerLeave={endScaleDrag}
                 className="relative w-full bg-white rounded-2xl shadow-md overflow-hidden"
                 style={{
                   aspectRatio: `${opts?.bgAspect || 1}`,
@@ -732,51 +650,13 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                           <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm"><Upload className="w-4 h-4 text-gray-400" /></div>
                         )}
                         <span className="text-sm text-gray-600">
-                          {uploading === el.id ? "Uploading..." : overrides[el.id]?.image ? "Photo lagi ✓ — change karne ke liye tap karo" : "Apni photo lagao"}
+                          {uploading === el.id ? "Uploading..." : overrides[el.id]?.image ? "Photo lagi ✓ — badalne ke liye tap karo" : "Apni photo lagao"}
                         </span>
                       </button>
-
-                      {/* Fit controls — zoom + move, taaki photo frame me sahi baithe */}
-                      {(overrides[el.id]?.image ?? el.defaultImage) && (
-                        <div className="mt-3">
-                          <p className="text-[11px] text-gray-400 mb-2">Photo ko frame ke hisaab se set karo:</p>
-                          {/* Smooth zoom slider — admin ki tarah (0.3×–4×) */}
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-[10px] text-gray-500 shrink-0">Zoom</span>
-                            <input
-                              type="range" min={0.3} max={4} step={0.05}
-                              value={overrides[el.id]?.scale ?? el.imgScale ?? 1}
-                              onChange={(e) => setOverrides((p) => ({ ...p, [el.id]: { ...p[el.id], scale: Number(e.target.value) } }))}
-                              className="flex-1 accent-amber-500"
-                            />
-                            <span className="text-[10px] font-semibold w-9 text-right text-gray-600">{Math.round((overrides[el.id]?.scale ?? el.imgScale ?? 1) * 100)}%</span>
-                          </div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {/* Zoom */}
-                            <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
-                              <button onClick={() => adjustImg(el.id, "zoomOut")} title="Zoom out" style={{ border: "none" }} className="w-8 h-8 rounded-lg bg-white text-gray-700 font-bold text-lg hover:bg-amber-50">−</button>
-                              <span className="text-[10px] text-gray-500 w-8 text-center">{Math.round((overrides[el.id]?.scale ?? 1) * 100)}%</span>
-                              <button onClick={() => adjustImg(el.id, "zoomIn")} title="Zoom in" style={{ border: "none" }} className="w-8 h-8 rounded-lg bg-white text-gray-700 font-bold text-lg hover:bg-amber-50">+</button>
-                            </div>
-                            {/* Move */}
-                            <div className="grid grid-cols-3 gap-0.5">
-                              <span />
-                              <button onClick={() => adjustImg(el.id, "up")} title="Up" style={{ border: "none" }} className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-amber-50 text-gray-700">↑</button>
-                              <span />
-                              <button onClick={() => adjustImg(el.id, "left")} title="Left" style={{ border: "none" }} className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-amber-50 text-gray-700">←</button>
-                              <button onClick={() => adjustImg(el.id, "reset")} title="Reset" style={{ border: "none" }} className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-amber-50 text-gray-700 text-xs">⟳</button>
-                              <button onClick={() => adjustImg(el.id, "right")} title="Right" style={{ border: "none" }} className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-amber-50 text-gray-700">→</button>
-                              <span />
-                              <button onClick={() => adjustImg(el.id, "down")} title="Down" style={{ border: "none" }} className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-amber-50 text-gray-700">↓</button>
-                              <span />
-                            </div>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   ))}
                   {imageBoxes.length > 0 && (
-                    <p className="text-[11px] text-gray-400 text-center">Preview upar live update hota hai — zoom aur arrows se photo set karo</p>
+                    <p className="text-[11px] text-gray-400 text-center">Photo upload karte hi crop editor khulega — wahin drag & zoom se set karein.</p>
                   )}
                 </div>
               )}
