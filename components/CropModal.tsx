@@ -36,7 +36,6 @@ export default function CropModal({
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
   const pinchRef = useRef<{ startDist: number; startZoom: number } | null>(null);
 
-  const MAX_ZOOM = 4;
 
   // Load the file → object URL, read natural size
   useEffect(() => {
@@ -68,31 +67,42 @@ export default function CropModal({
     return () => window.removeEventListener("resize", measure);
   }, [aspect]);
 
-  // COVER scale: smallest scale that fully fills the box (no blank area at zoom 1)
-  const cover = nat ? Math.max(box.w / nat.w, box.h / nat.h) : 1;
+  // CONTAIN (fit) scale: at zoom 1 the WHOLE source image is visible inside the
+  // box (letterboxed with white where ratios differ). This is the non-destructive
+  // baseline — nothing is cut unless the user zooms/pans. See traced proof.
+  const base = nat ? Math.min(box.w / nat.w, box.h / nat.h) : 1;
+  // Zoom at which the frame is exactly FILLED (cover). Above this the user is
+  // deliberately cropping; the slider allows well beyond it for tight crops.
+  const coverZoom = nat ? Math.max(box.w / nat.w, box.h / nat.h) / base : 1;
+  const maxZoom = Math.max(4, coverZoom * 3);
 
-  // Clamp the pan so the (scaled) image always fully covers the box — never blank
+  const displayScale = base * zoom; // px-per-source-px currently shown
+  const contentW = nat ? nat.w * displayScale : box.w;
+  const contentH = nat ? nat.h * displayScale : box.h;
+
+  // Clamp the pan so the image can never be dragged out of the box. When a
+  // dimension is smaller than the box (letterbox) it stays centred (max = 0).
   const clampPos = useCallback((p: { x: number; y: number }, z: number) => {
     if (!nat) return p;
-    const contentW = nat.w * cover * z;
-    const contentH = nat.h * cover * z;
-    const maxX = Math.max(0, (contentW - box.w) / 2);
-    const maxY = Math.max(0, (contentH - box.h) / 2);
+    const cw = nat.w * base * z;
+    const ch = nat.h * base * z;
+    const maxX = Math.max(0, (cw - box.w) / 2);
+    const maxY = Math.max(0, (ch - box.h) / 2);
     return {
       x: Math.max(-maxX, Math.min(maxX, p.x)),
       y: Math.max(-maxY, Math.min(maxY, p.y)),
     };
-  }, [nat, cover, box.w, box.h]);
+  }, [nat, base, box.w, box.h]);
 
-  // Re-clamp position whenever zoom shrinks
+  // Re-clamp position whenever zoom changes
   useEffect(() => { setPos((p) => clampPos(p, zoom)); }, [zoom, clampPos]);
 
   // Low-resolution warning: is source big enough for the print box?
   useEffect(() => {
     if (!nat) return;
     const needW = box.w * 2; // print target derived below is >= 1600; 2x preview is a soft floor
-    setLowQ(nat.w * cover * zoom < needW * 0.6);
-  }, [nat, cover, zoom, box.w]);
+    setLowQ(nat.w * base * zoom < needW * 0.6);
+  }, [nat, base, zoom, box.w]);
 
   function dist(a: { x: number; y: number }, b: { x: number; y: number }) {
     return Math.hypot(a.x - b.x, a.y - b.y);
@@ -120,7 +130,7 @@ export default function CropModal({
       const [a, b] = [...pointers.current.values()];
       const d = dist(a, b);
       if (pinchRef.current.startDist > 0) {
-        const z = Math.max(1, Math.min(MAX_ZOOM, pinchRef.current.startZoom * (d / pinchRef.current.startDist)));
+        const z = Math.max(1, Math.min(maxZoom, pinchRef.current.startZoom * (d / pinchRef.current.startDist)));
         setZoom(z);
       }
       return;
@@ -144,7 +154,7 @@ export default function CropModal({
   // Desktop wheel zoom
   function onWheel(e: React.WheelEvent) {
     e.preventDefault();
-    setZoom((z) => Math.max(1, Math.min(MAX_ZOOM, z - e.deltaY * 0.0015)));
+    setZoom((z) => Math.max(1, Math.min(maxZoom, z - e.deltaY * 0.0015)));
   }
 
   async function crop() {
@@ -152,14 +162,15 @@ export default function CropModal({
     if (!img || !nat) return;
     setProcessing(true);
     try {
-      // Mirror the on-screen preview EXACTLY: cover into the box, scale(zoom)
-      // around box centre, then pan by pos. Draw in destination coords so the
-      // aspect ratio is never distorted and the visible area matches 1:1.
-      const displayScale = cover * zoom;
-      const contentW = nat.w * displayScale;
-      const contentH = nat.h * displayScale;
-      const contentLeft = box.w / 2 + pos.x - contentW / 2;
-      const contentTop = box.h / 2 + pos.y - contentH / 2;
+      // Mirror the on-screen preview EXACTLY: contain (base) into the box,
+      // scale(zoom) around box centre, then pan by pos. Draw in destination
+      // coords so the aspect ratio is never distorted and the visible area
+      // matches the editor 1:1 (letterbox stays white where the image is fit).
+      const dScale = base * zoom;
+      const cW = nat.w * dScale;
+      const cH = nat.h * dScale;
+      const contentLeft = box.w / 2 + pos.x - cW / 2;
+      const contentTop = box.h / 2 + pos.y - cH / 2;
 
       // Print-quality output: keep box ratio, upscale to a print-safe target
       const outW = Math.round(Math.min(2400, Math.max(1600, box.w * 3)));
@@ -178,8 +189,8 @@ export default function CropModal({
         img,
         contentLeft * outScale,
         contentTop * outScale,
-        contentW * outScale,
-        contentH * outScale
+        cW * outScale,
+        cH * outScale
       );
       canvas.toBlob((blob) => {
         setProcessing(false);
@@ -216,7 +227,7 @@ export default function CropModal({
               onPointerUp={onPointerUp}
               onPointerCancel={onPointerUp}
               onWheel={onWheel}
-              className="relative overflow-hidden rounded-xl bg-black/40 touch-none select-none ring-1 ring-white/40 shadow-2xl"
+              className="relative overflow-hidden rounded-xl bg-white touch-none select-none ring-1 ring-white/40 shadow-2xl"
               style={{ width: box.w, height: box.h, cursor: "move" }}
             >
               {imgUrl && (
@@ -229,12 +240,12 @@ export default function CropModal({
                   onLoad={(e) => { const t = e.currentTarget; if (t.naturalWidth) setNat({ w: t.naturalWidth, h: t.naturalHeight }); }}
                   className="absolute pointer-events-none"
                   style={{
-                    left: "50%",
-                    top: "50%",
-                    width: box.w,
-                    height: box.h,
-                    objectFit: "cover",
-                    transform: `translate(-50%, -50%) translate(${pos.x}px, ${pos.y}px) scale(${zoom})`,
+                    // Natural-aspect sizing (contain) — identical model to the
+                    // canvas export, so editor and product preview match 1:1.
+                    width: contentW,
+                    height: contentH,
+                    left: (box.w - contentW) / 2 + pos.x,
+                    top: (box.h - contentH) / 2 + pos.y,
                   }}
                 />
               )}
@@ -250,11 +261,11 @@ export default function CropModal({
 
       {/* Controls (fixed at bottom on mobile) */}
       <div className="bg-white rounded-t-2xl px-5 pt-4 pb-5 shrink-0" onClick={(e) => e.stopPropagation()}>
-        <p className="text-[12px] text-gray-500 mb-3 text-center">Photo ko drag karke position set karein • do ungliyon se pinch karke zoom • ya slider</p>
+        <p className="text-[12px] text-gray-500 mb-3 text-center">Poori photo dikh rahi hai — drag + zoom se jitna chahe frame mein set karein (kuch apne aap nahi katega)</p>
         <div className="flex items-center gap-3 mb-4">
           <span className="text-xs text-gray-500 shrink-0">Zoom</span>
           <input
-            type="range" min={1} max={MAX_ZOOM} step={0.02}
+            type="range" min={1} max={maxZoom} step={0.02}
             value={zoom}
             aria-label="Zoom image"
             onChange={(e) => setZoom(Number(e.target.value))}
