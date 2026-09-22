@@ -139,6 +139,11 @@ function mirrorCss(mirror?: "none" | "h" | "v"): string {
   return mirror === "h" ? " scaleX(-1)" : mirror === "v" ? " scaleY(-1)" : "";
 }
 
+// Shared button system (keeps distinct button styles low + one signature colour).
+// Add per-use `rounded-*` and `py-*`; orange = primary action everywhere.
+const BTN_PRIMARY = "bg-orange-500 hover:bg-orange-600 text-white font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
+const BTN_SECONDARY = "bg-white border-2 border-gray-300 hover:border-gray-400 text-gray-900 font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
+
 export default function FrameCustomizer({ product, templates }: { product: Product; templates: Template[] }) {
   const router = useRouter();
   const [activeIdx, setActiveIdx] = useState(0);
@@ -435,11 +440,13 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
       <div className="space-y-5">
         <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">{product.name}</h1>
-          <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
             <PriceTag p={product} />
-            <span className="text-sm text-gray-400 bg-gray-50 px-3 py-1 rounded-full">🚚 {product.deliveryDays} days delivery</span>
+            <span className="text-sm text-gray-400 bg-gray-50 px-3 py-1 rounded-full w-fit">🚚 {product.deliveryDays} days delivery</span>
           </div>
-          <ProductBadges p={product} />
+          <div className="mt-3">
+            <ProductBadges p={product} />
+          </div>
 
           {/* Attributes — Size / Quality / Colour / custom */}
           {(product.attributes?.length ?? 0) > 0 && (
@@ -458,7 +465,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={variation.image} alt="" className="w-12 h-12 object-cover rounded-lg border border-orange-200" />
                   )}
-                  <p className="text-sm font-semibold text-gray-800">
+                  <p className="text-sm font-semibold text-gray-900">
                     {Object.values(variation.attrs).join(" • ")}: <span className="text-orange-500">₹{price}</span>
                     {variation.salePrice && variation.salePrice < variation.price ? (
                       <span className="text-xs text-gray-400 line-through ml-1.5">₹{variation.price}</span>
@@ -474,14 +481,14 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
             <button
               onClick={() => addToCart(true)}
               disabled={outOfStock}
-              className="flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl transition-colors"
+              className={`${BTN_SECONDARY} py-3.5 rounded-xl`}
             >
               <Zap className="w-4 h-4" /> {outOfStock ? "Out of Stock" : "Buy Now"}
             </button>
             {product.customizeEnabled !== false && (
               <button
                 onClick={() => { setStep(1); setCustomizing(true); }}
-                className="flex items-center justify-center gap-2 font-bold py-3.5 rounded-xl transition-all bg-gradient-to-r from-gray-900 to-gray-700 hover:from-black hover:to-gray-800 text-amber-300 shadow-lg"
+                className={`${BTN_PRIMARY} py-3.5 rounded-xl shadow-lg shadow-orange-200`}
               >
                 <PenLine className="w-4 h-4" /> Customize Now
               </button>
@@ -513,7 +520,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
           <button
             onClick={() => addToCart(!customizing)}
             disabled={outOfStock}
-            className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg shadow-orange-200"
+            className={`${BTN_PRIMARY} w-full py-4 rounded-xl shadow-lg shadow-orange-200`}
           >
             <ShoppingCart className="w-5 h-5" /> {outOfStock ? "Out of Stock" : "Add to Cart"}
           </button>
@@ -536,14 +543,14 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
             <button
               onClick={() => addToCart(true)}
               disabled={outOfStock}
-              className="flex items-center justify-center gap-1.5 bg-white text-gray-900 font-bold py-3 rounded-2xl shadow-sm disabled:opacity-40"
+              className={`${BTN_SECONDARY} py-3 rounded-2xl`}
             >
               <Zap className="w-4 h-4" /> {outOfStock ? "Out of Stock" : "Buy Now"}
             </button>
             {product.customizeEnabled !== false && (
               <button
                 onClick={() => { setStep(1); setCustomizing(true); }}
-                className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-gray-900 to-gray-700 text-amber-300 font-bold py-3 rounded-2xl shadow-lg"
+                className={`${BTN_PRIMARY} py-3 rounded-2xl shadow-lg shadow-orange-200`}
               >
                 <PenLine className="w-4 h-4" /> Customize Now
               </button>
@@ -563,7 +570,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
             <div className="flex items-center justify-between px-4 py-3 bg-white shadow-sm shrink-0">
               <p className="font-bold text-gray-900 flex items-center gap-2"><PenLine className="w-4 h-4 text-amber-500" /> Apna Design Banao</p>
               <button onClick={() => setCustomizing(false)} className="p-2 hover:bg-gray-100 rounded-full">
-                <X className="w-5 h-5 text-gray-500" />
+                <X className="w-5 h-5 text-gray-600" />
               </button>
             </div>
 
@@ -605,10 +612,10 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
               <div className="flex items-center justify-center gap-2">
                 {[{ n: 1, l: "Text & Photo" }, { n: 2, l: "Color & Size" }].map((s2, i) => (
                   <button key={s2.n} onClick={() => setStep(s2.n)} className="flex items-center gap-1.5">
-                    <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step === s2.n ? "bg-gray-900 text-amber-300" : step > s2.n ? "bg-green-500 text-white" : "bg-gray-200 text-gray-500"}`}>
+                    <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step === s2.n ? "bg-gray-900 text-amber-300" : step > s2.n ? "bg-green-500 text-white" : "bg-gray-200 text-gray-600"}`}>
                       {step > s2.n ? "✓" : s2.n}
                     </span>
-                    <span className={`text-[11px] font-medium ${step === s2.n ? "text-gray-900" : "text-gray-400"}`}>{s2.l}</span>
+                    <span className={`text-xs font-medium ${step === s2.n ? "text-gray-900" : "text-gray-400"}`}>{s2.l}</span>
                     {i < 1 && <span className="w-4 h-px bg-gray-300 ml-1" />}
                   </button>
                 ))}
@@ -619,7 +626,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                 <div className="space-y-4">
                   {textBoxes.map((el) => (
                     <div key={el.id} className="bg-white rounded-2xl shadow-sm p-4">
-                      <label className="block text-sm font-semibold text-gray-800 mb-2">✏️ {el.label}</label>
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">✏️ {el.label}</label>
                       <div className="relative">
                         <input
                           className="w-full bg-gray-100 rounded-2xl px-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 pr-14"
@@ -637,7 +644,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                   ))}
                   {imageBoxes.map((el) => (
                     <div key={el.id} className="bg-white rounded-2xl shadow-sm p-4">
-                      <label className="block text-sm font-semibold text-gray-800 mb-2">📸 {el.label}</label>
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">📸 {el.label}</label>
                       <button
                         onClick={() => fileRefs.current[el.id]?.click()}
                         className="w-full flex items-center gap-3 bg-gray-100 rounded-2xl p-3 text-left hover:bg-amber-50 transition-colors"
@@ -650,13 +657,13 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                           <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm"><Upload className="w-4 h-4 text-gray-400" /></div>
                         )}
                         <span className="text-sm text-gray-600">
-                          {uploading === el.id ? "Uploading..." : overrides[el.id]?.image ? "Photo lagi ✓ — badalne ke liye tap karo" : "Apni photo lagao"}
+                          {uploading === el.id ? "Uploading..." : overrides[el.id]?.image ? "Photo lagi ✓ — badalne ke liye tap karo" : `${el.label} — photo lagao`}
                         </span>
                       </button>
                     </div>
                   ))}
                   {imageBoxes.length > 0 && (
-                    <p className="text-[11px] text-gray-400 text-center">Photo upload karte hi crop editor khulega — wahin drag & zoom se set karein.</p>
+                    <p className="text-xs text-gray-400 text-center">Photo upload karte hi crop editor khulega — wahin drag & zoom se set karein.</p>
                   )}
                 </div>
               )}
@@ -666,7 +673,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                 <div className="space-y-4">
                   {opts && opts.frameColors.allowed.length > 0 && elements.some((e) => e.type === "frame") && (
                     <div className="bg-white rounded-2xl shadow-sm p-4">
-                      <label className="block text-sm font-semibold text-gray-800 mb-2">🎨 Frame Color</label>
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">🎨 Frame Color</label>
                       <div className="flex flex-wrap gap-3">
                         {opts.frameColors.allowed.map((c) => (
                           <button
@@ -681,7 +688,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                   )}
                   {opts && opts.textColors.allowed.length > 0 && textBoxes.length > 0 && (
                     <div className="bg-white rounded-2xl shadow-sm p-4">
-                      <label className="block text-sm font-semibold text-gray-800 mb-2">🖍️ Text Color</label>
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">🖍️ Text Color</label>
                       <div className="flex flex-wrap gap-3">
                         {opts.textColors.allowed.map((c) => (
                           <button
@@ -697,8 +704,8 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                   {/* Acrylic Mirror finish — admin-enabled premium option */}
                   {opts?.acrylicMirror?.enabled && opts.acrylicMirror.allowed.length > 0 && textBoxes.length > 0 && (
                     <div className="bg-white rounded-2xl shadow-sm p-4">
-                      <label className="block text-sm font-semibold text-gray-800 mb-1">✨ Acrylic Mirror Text</label>
-                      <p className="text-[11px] text-gray-400 mb-2">4mm mirror finish, 3D raised look — premium</p>
+                      <label className="block text-sm font-semibold text-gray-900 mb-1">✨ Acrylic Mirror Text</label>
+                      <p className="text-xs text-gray-400 mb-2">4mm mirror finish, 3D raised look — premium</p>
                       <div className="flex flex-wrap gap-3">
                         {opts.acrylicMirror.allowed.map((label) => (
                           <button
@@ -711,12 +718,12 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                               style={{ background: MIRROR_FINISHES[label] ?? "#ccc", boxShadow: MIRROR_TEXT_SHADOW }}
                               className={`w-11 h-11 rounded-full transition-transform ${mirrorFinish === label ? "ring-4 ring-amber-300 scale-110" : ""}`}
                             />
-                            <span className={`text-[9px] leading-tight text-center max-w-[62px] ${mirrorFinish === label ? "text-gray-900 font-semibold" : "text-gray-500"}`}>{label}</span>
+                            <span className={`text-[9px] leading-tight text-center max-w-[62px] ${mirrorFinish === label ? "text-gray-900 font-semibold" : "text-gray-600"}`}>{label}</span>
                           </button>
                         ))}
                       </div>
                       {mirrorFinish && (
-                        <button onClick={() => setMirrorFinish(null)} style={{ border: "none" }} className="mt-2 text-[11px] text-gray-400 hover:text-gray-600">
+                        <button onClick={() => setMirrorFinish(null)} style={{ border: "none" }} className="mt-2 text-xs text-gray-400 hover:text-gray-600">
                           ✕ Normal color pe wapas jao
                         </button>
                       )}
@@ -731,8 +738,8 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                         <div className="flex items-center gap-2">
                           <span className="w-8 h-8 rounded-full shrink-0" style={{ background: `radial-gradient(circle, ${adminLightCfg.color}, #bbb)` }} />
                           <div>
-                            <label className="block text-sm font-semibold text-gray-800">💡 Light</label>
-                            <p className="text-[11px] text-gray-400">LED glow ON/OFF</p>
+                            <label className="block text-sm font-semibold text-gray-900">💡 Light</label>
+                            <p className="text-xs text-gray-400">LED glow ON/OFF</p>
                           </div>
                         </div>
                         <button
@@ -752,8 +759,8 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                         <div className="flex items-center gap-2">
                           <span className="w-8 h-8 rounded-full shrink-0" style={{ background: custGradCss }} />
                           <div>
-                            <label className="block text-sm font-semibold text-gray-800">🌈 Gradient Light</label>
-                            <p className="text-[11px] text-gray-400">Design pe premium gradient shine</p>
+                            <label className="block text-sm font-semibold text-gray-900">🌈 Gradient Light</label>
+                            <p className="text-xs text-gray-400">Design pe premium gradient shine</p>
                           </div>
                         </div>
                         <button
@@ -769,7 +776,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
 
                   {opts && opts.fonts.allowed.length > 0 && textBoxes.length > 0 && (
                     <div className="bg-white rounded-2xl shadow-sm p-4">
-                      <label className="block text-sm font-semibold text-gray-800 mb-2">🔤 Writing Style</label>
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">🔤 Writing Style</label>
                       <div className="grid grid-cols-2 gap-2">
                         {opts.fonts.allowed.map((f) => {
                           const label = FONT_LABELS[f] ?? opts.customFonts.find((cf) => cf.family === f)?.label ?? f;
@@ -789,7 +796,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                   )}
                   {opts && opts.textSizes.allowed.length > 0 && textBoxes.length > 0 && (
                     <div className="bg-white rounded-2xl shadow-sm p-4">
-                      <label className="block text-sm font-semibold text-gray-800 mb-2">📏 Text Size</label>
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">📏 Text Size</label>
                       <div className="flex gap-2">
                         {opts.textSizes.allowed.map((s2) => (
                           <button
@@ -807,7 +814,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                   {/* Mirror Text — only for text boxes the admin allows */}
                   {textBoxes.filter((el) => el.mirrorAllowed).map((el) => (
                     <div key={el.id} className="bg-white rounded-2xl shadow-sm p-4">
-                      <label className="block text-sm font-semibold text-gray-800 mb-2">🪞 Mirror — {el.label}</label>
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">🪞 Mirror — {el.label}</label>
                       <div className="flex gap-2">
                         {([["none", "Normal"], ["h", "↔ Flip"], ["v", "↕ Flip"]] as const).map(([m, lbl]) => {
                           const cur = overrides[el.id]?.mirror ?? el.mirror ?? "none";
@@ -855,7 +862,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
             {/* Sticky footer — price + add to cart */}
             <div className="shrink-0 bg-white px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
               {needsVariation && (
-                <p className="text-[11px] text-amber-600 mb-1.5 text-center">👆 Step 2 mein saare options select karo</p>
+                <p className="text-xs text-amber-600 mb-1.5 text-center">👆 Step 2 mein saare options select karo</p>
               )}
               <div className="flex items-center gap-3">
                 <div>
@@ -865,8 +872,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                 <button
                   onClick={() => addToCart(false)}
                   disabled={outOfStock}
-                  style={{ border: "none" }}
-                  className="flex-1 bg-gradient-to-r from-gray-900 to-gray-700 text-amber-300 font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2 disabled:opacity-40"
+                  className={`${BTN_PRIMARY} flex-1 py-3.5 rounded-2xl`}
                 >
                   <ShoppingCart className="w-4 h-4" /> {outOfStock ? "Out of Stock" : "Add to Cart"}
                 </button>
