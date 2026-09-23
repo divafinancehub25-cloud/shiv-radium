@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Plus, Trash2, Save, Image as ImageIcon, Type, Square, Circle, ChevronUp, ChevronDown, Copy } from "lucide-react";
+import { Plus, Trash2, Save, Image as ImageIcon, Type, Square, Circle, ChevronUp, ChevronDown, Copy, Undo2, Redo2 } from "lucide-react";
 import CropModal from "@/components/CropModal";
 import CurvatureEditor from "@/components/CurvatureEditor";
 import { clipPathCss } from "@/lib/clipShapes";
@@ -260,6 +260,13 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
   // Unsaved-changes guard: marks dirty on any design edit, warns before leaving.
   const [dirty, setDirty] = useState(false);
   const skipDirty = useRef(true); // skip first mount + programmatic loads
+  // Undo/Redo history — snapshots of the whole design; restore replaces state.
+  type Snap = { elements: FrameElement[]; options: CustomerOptions; bgImage: string | null; templateName: string };
+  const undoStack = useRef<Snap[]>([]);
+  const redoStack = useRef<Snap[]>([]);
+  const lastSnap = useRef<Snap | null>(null);
+  const restoring = useRef(false);
+  const [histVer, setHistVer] = useState(0); // bumps to re-render button enabled state
 
   async function uploadFile(file: File): Promise<string | null> {
     const formData = new FormData();
@@ -312,11 +319,50 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
 
   useEffect(() => { loadTemplates(); }, [loadTemplates]);
 
-  // Mark design dirty on any edit (batched setStates = one effect run per commit)
+  // Mark dirty + record undo history on any edit (batched setStates = one commit).
   useEffect(() => {
-    if (skipDirty.current) { skipDirty.current = false; return; }
+    const cur: Snap = { elements, options, bgImage, templateName };
+    // Programmatic load (openTemplate/newTemplate): reset history baseline.
+    if (skipDirty.current) {
+      skipDirty.current = false;
+      undoStack.current = []; redoStack.current = []; lastSnap.current = cur;
+      setHistVer((v) => v + 1);
+      return;
+    }
+    // Restore (undo/redo): don't push; just update baseline.
+    if (restoring.current) { restoring.current = false; lastSnap.current = cur; return; }
+    // Real user edit: push previous snapshot, clear redo.
+    if (lastSnap.current) {
+      undoStack.current.push(lastSnap.current);
+      if (undoStack.current.length > 60) undoStack.current.shift();
+      redoStack.current = [];
+      setHistVer((v) => v + 1);
+    }
+    lastSnap.current = cur;
     setDirty(true);
   }, [elements, options, bgImage, templateName]);
+
+  const applySnap = useCallback((s: Snap) => {
+    restoring.current = true;
+    setElements(s.elements);
+    setOptions(s.options);
+    setBgImage(s.bgImage);
+    setTemplateName(s.templateName);
+    setDirty(true);
+    setHistVer((v) => v + 1);
+  }, []);
+
+  const undo = useCallback(() => {
+    if (!undoStack.current.length) return;
+    redoStack.current.push({ elements, options, bgImage, templateName });
+    applySnap(undoStack.current.pop()!);
+  }, [elements, options, bgImage, templateName, applySnap]);
+
+  const redo = useCallback(() => {
+    if (!redoStack.current.length) return;
+    undoStack.current.push({ elements, options, bgImage, templateName });
+    applySnap(redoStack.current.pop()!);
+  }, [elements, options, bgImage, templateName, applySnap]);
 
   // Warn before closing/reloading the tab with unsaved changes
   useEffect(() => {
@@ -325,6 +371,19 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
     window.addEventListener("beforeunload", h);
     return () => window.removeEventListener("beforeunload", h);
   }, [dirty]);
+
+  // Keyboard: Ctrl/Cmd+Z = undo, Ctrl/Cmd+Shift+Z or Ctrl+Y = redo
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      const k = e.key.toLowerCase();
+      if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); redo(); }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [undo, redo]);
 
   function openTemplate(t: Template) {
     skipDirty.current = true; setDirty(false);
@@ -649,6 +708,11 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
       <div className="flex items-center justify-between mb-1">
         <h2 className="font-semibold text-gray-900">🖼️ Frame Designer</h2>
         <div className="flex items-center gap-2">
+          {(() => { void histVer; return null; })()}
+          <div className="flex items-center gap-1">
+            <button onClick={undo} disabled={undoStack.current.length === 0} title="Undo (Ctrl+Z)" aria-label="Undo" className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"><Undo2 className="w-3.5 h-3.5" /></button>
+            <button onClick={redo} disabled={redoStack.current.length === 0} title="Redo (Ctrl+Shift+Z)" aria-label="Redo" className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"><Redo2 className="w-3.5 h-3.5" /></button>
+          </div>
           <span className={`text-xs font-medium ${dirty ? "text-amber-600" : "text-green-600"}`}>
             {dirty ? "● Unsaved changes" : "✓ All saved"}
           </span>
