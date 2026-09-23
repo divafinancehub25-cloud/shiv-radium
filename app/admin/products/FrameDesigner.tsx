@@ -257,6 +257,9 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
   const [newFontName, setNewFontName] = useState("");
   const [cropState, setCropState] = useState<{ file: File; elId: string; aspect: number } | null>(null);
   const [curveOpen, setCurveOpen] = useState(false);
+  // Unsaved-changes guard: marks dirty on any design edit, warns before leaving.
+  const [dirty, setDirty] = useState(false);
+  const skipDirty = useRef(true); // skip first mount + programmatic loads
 
   async function uploadFile(file: File): Promise<string | null> {
     const formData = new FormData();
@@ -309,7 +312,22 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
 
   useEffect(() => { loadTemplates(); }, [loadTemplates]);
 
+  // Mark design dirty on any edit (batched setStates = one effect run per commit)
+  useEffect(() => {
+    if (skipDirty.current) { skipDirty.current = false; return; }
+    setDirty(true);
+  }, [elements, options, bgImage, templateName]);
+
+  // Warn before closing/reloading the tab with unsaved changes
+  useEffect(() => {
+    if (!dirty) return;
+    const h = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [dirty]);
+
   function openTemplate(t: Template) {
+    skipDirty.current = true; setDirty(false);
     setActiveId(t.id);
     setTemplateName(t.name);
     setElements(t.elements);
@@ -319,6 +337,7 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
   }
 
   function newTemplate() {
+    skipDirty.current = true; setDirty(false);
     setActiveId(null);
     setTemplateName(`Template ${templates.length + 1}`);
     setElements([]);
@@ -476,6 +495,7 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
       const embedded = allCustomFonts.filter((f) => options.fonts.allowed.includes(f.family));
       onPending?.({ name: templateName.trim(), elements, bgImage, options: { ...options, customFonts: embedded } });
       setMsg("✅ Template ready — 'Create Product' dabate hi save ho jayega");
+      setDirty(false);
       return;
     }
     setSaving(true);
@@ -492,6 +512,7 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
       if (!res.ok) throw new Error(data.error ?? "Save failed");
       if (!activeId) setActiveId(data.template.id);
       setMsg("✅ Template saved!");
+      setDirty(false);
       loadTemplates();
     } catch (err) {
       setMsg("❌ " + (err as Error).message);
@@ -628,6 +649,9 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
       <div className="flex items-center justify-between mb-1">
         <h2 className="font-semibold text-gray-900">🖼️ Frame Designer</h2>
         <div className="flex items-center gap-2">
+          <span className={`text-xs font-medium ${dirty ? "text-amber-600" : "text-green-600"}`}>
+            {dirty ? "● Unsaved changes" : "✓ All saved"}
+          </span>
           <button onClick={newTemplate} className="flex items-center gap-1 text-xs font-semibold text-orange-500 border border-orange-300 hover:bg-orange-50 px-3 py-1.5 rounded-lg transition-colors">
             <Plus className="w-3.5 h-3.5" /> New Template
           </button>
@@ -784,14 +808,18 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
                 <input className={inputClass} value={selected.label} onChange={(e) => updateSelected({ label: e.target.value })} />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div><label className="block text-gray-500 mb-0.5">X (%)</label><input type="number" className={inputClass} value={num(selected.x)} onChange={(e) => updateSelected({ x: Number(e.target.value) })} /></div>
-                <div><label className="block text-gray-500 mb-0.5">Y (%)</label><input type="number" className={inputClass} value={num(selected.y)} onChange={(e) => updateSelected({ y: Number(e.target.value) })} /></div>
-                <div><label className="block text-gray-500 mb-0.5">Width (%)</label><input type="number" className={inputClass} value={num(selected.w)} onChange={(e) => updateSelected({ w: Number(e.target.value) })} /></div>
-                <div><label className="block text-gray-500 mb-0.5">Height (%)</label><input type="number" className={inputClass} value={num(selected.h)} onChange={(e) => updateSelected({ h: Number(e.target.value) })} /></div>
-                <div><label className="block text-gray-500 mb-0.5">Border Radius</label><input type="number" className={inputClass} value={selected.radius} onChange={(e) => updateSelected({ radius: Number(e.target.value) })} /></div>
-                <div><label className="block text-gray-500 mb-0.5">Rotation (°)</label><input type="number" className={inputClass} value={selected.rotation} onChange={(e) => updateSelected({ rotation: Number(e.target.value) })} /></div>
-              </div>
+              {/* Advanced — exact position/size/rotation (hidden by default; drag on canvas for normal use) */}
+              <details className="border border-gray-100 rounded-lg bg-gray-50/60">
+                <summary className="cursor-pointer select-none px-2.5 py-1.5 text-gray-600 font-medium">⚙️ Advanced — position &amp; size</summary>
+                <div className="grid grid-cols-2 gap-2 p-2.5 pt-1">
+                  <div><label className="block text-gray-500 mb-0.5">X (%)</label><input type="number" className={inputClass} value={num(selected.x)} onChange={(e) => updateSelected({ x: Number(e.target.value) })} /></div>
+                  <div><label className="block text-gray-500 mb-0.5">Y (%)</label><input type="number" className={inputClass} value={num(selected.y)} onChange={(e) => updateSelected({ y: Number(e.target.value) })} /></div>
+                  <div><label className="block text-gray-500 mb-0.5">Width (%)</label><input type="number" className={inputClass} value={num(selected.w)} onChange={(e) => updateSelected({ w: Number(e.target.value) })} /></div>
+                  <div><label className="block text-gray-500 mb-0.5">Height (%)</label><input type="number" className={inputClass} value={num(selected.h)} onChange={(e) => updateSelected({ h: Number(e.target.value) })} /></div>
+                  <div><label className="block text-gray-500 mb-0.5">Border Radius</label><input type="number" className={inputClass} value={selected.radius} onChange={(e) => updateSelected({ radius: Number(e.target.value) })} /></div>
+                  <div><label className="block text-gray-500 mb-0.5">Rotation (°)</label><input type="number" className={inputClass} value={selected.rotation} onChange={(e) => updateSelected({ rotation: Number(e.target.value) })} /></div>
+                </div>
+              </details>
 
               {/* Layer */}
               <div>
