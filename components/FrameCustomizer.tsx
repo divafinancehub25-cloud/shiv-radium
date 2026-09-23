@@ -887,6 +887,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
         <CropModal
           file={cropState.file}
           aspect={cropState.aspect}
+          confirmLabel="✓ Use This Photo"
           onCancel={() => setCropState(null)}
           onDone={(cropped) => {
             const elId = cropState.elId;

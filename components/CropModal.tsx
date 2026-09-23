@@ -4,26 +4,29 @@ import { useState, useRef, useEffect, useCallback } from "react";
 
 // Universal non-destructive crop engine — shared by Admin (FrameDesigner) and
 // User (FrameCustomizer). The source image is never auto-cut on upload: it is
-// loaded full, fitted to COVER the crop viewport (frame ratio), and the user
-// drags + zooms to choose the visible area. Only "Crop & Use" rasterises the
-// chosen region at print resolution.
+// loaded full and FIT (contain) into the frame ratio by default, so nothing is
+// lost unless the user zooms/pans. Fit/Fill, rotate, drag, pinch/wheel zoom are
+// all supported; only the confirm button rasterises at print resolution.
 //
-// Props are intentionally stable (file, aspect, onDone, onCancel) so both
-// panels use the exact same engine and produce identical output.
+// mode="admin" and mode="customer" render the same engine; only labels differ.
 export default function CropModal({
   file,
   aspect, // width / height of the target box
   onDone,
   onCancel,
+  confirmLabel = "✓ Crop & Use",
 }: {
   file: File;
   aspect: number;
   onDone: (cropped: File) => void;
   onCancel: () => void;
+  confirmLabel?: string;
 }) {
   const [imgUrl, setImgUrl] = useState<string | null>(null);
   const [nat, setNat] = useState<{ w: number; h: number } | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [rot, setRot] = useState(0); // degrees: 0 / 90 / 180 / 270
+  const [mode, setMode] = useState<"fit" | "fill">("fit");
   const [pos, setPos] = useState({ x: 0, y: 0 }); // px offset of image centre
   const [box, setBox] = useState({ w: 320, h: 320 });
   const [processing, setProcessing] = useState(false);
@@ -31,11 +34,9 @@ export default function CropModal({
   const [lowQ, setLowQ] = useState(false);
 
   const imgRef = useRef<HTMLImageElement | null>(null);
-  // pointerId -> current position, for drag (1 finger) + pinch (2 fingers)
   const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
   const pinchRef = useRef<{ startDist: number; startZoom: number } | null>(null);
-
 
   // Load the file → object URL, read natural size
   useEffect(() => {
@@ -57,7 +58,7 @@ export default function CropModal({
     function measure() {
       const a = aspect || 1;
       const availW = Math.min(window.innerWidth - 32, 460);
-      const availH = Math.max(180, Math.min(window.innerHeight * 0.52, 520));
+      const availH = Math.max(180, Math.min(window.innerHeight * 0.46, 520));
       let w = availW, h = availW / a;
       if (h > availH) { h = availH; w = availH * a; }
       setBox({ w: Math.round(w), h: Math.round(h) });
@@ -67,41 +68,38 @@ export default function CropModal({
     return () => window.removeEventListener("resize", measure);
   }, [aspect]);
 
-  // CONTAIN (fit) scale: at zoom 1 the WHOLE source image is visible inside the
-  // box (letterboxed with white where ratios differ). This is the non-destructive
-  // baseline — nothing is cut unless the user zooms/pans. See traced proof.
-  const base = nat ? Math.min(box.w / nat.w, box.h / nat.h) : 1;
-  // Zoom at which the frame is exactly FILLED (cover). Above this the user is
-  // deliberately cropping; the slider allows well beyond it for tight crops.
-  const coverZoom = nat ? Math.max(box.w / nat.w, box.h / nat.h) / base : 1;
-  const maxZoom = Math.max(4, coverZoom * 3);
+  // Rotated footprint (per unit scale): at 90/270 the width/height swap.
+  const swap = rot % 180 !== 0;
+  const ew = nat ? (swap ? nat.h : nat.w) : 1; // footprint width  (source units)
+  const eh = nat ? (swap ? nat.w : nat.h) : 1; // footprint height
+  // FIT = contain (whole image visible, letterboxed). FILL = cover (frame filled).
+  const base = nat
+    ? (mode === "fill" ? Math.max(box.w / ew, box.h / eh) : Math.min(box.w / ew, box.h / eh))
+    : 1;
+  const coverScale = nat ? Math.max(box.w / ew, box.h / eh) : 1;
+  const maxZoom = Math.max(4, (coverScale / base) * 3);
 
-  const displayScale = base * zoom; // px-per-source-px currently shown
-  const contentW = nat ? nat.w * displayScale : box.w;
-  const contentH = nat ? nat.h * displayScale : box.h;
+  const displayScale = base * zoom;         // px per source px
+  const iw = nat ? nat.w * displayScale : box.w; // on-screen (unrotated) img size
+  const ih = nat ? nat.h * displayScale : box.h;
+  const footW = ew * displayScale;          // rotated footprint on screen
+  const footH = eh * displayScale;
 
-  // Clamp the pan so the image can never be dragged out of the box. When a
-  // dimension is smaller than the box (letterbox) it stays centred (max = 0).
-  const clampPos = useCallback((p: { x: number; y: number }, z: number) => {
-    if (!nat) return p;
-    const cw = nat.w * base * z;
-    const ch = nat.h * base * z;
-    const maxX = Math.max(0, (cw - box.w) / 2);
-    const maxY = Math.max(0, (ch - box.h) / 2);
-    return {
-      x: Math.max(-maxX, Math.min(maxX, p.x)),
-      y: Math.max(-maxY, Math.min(maxY, p.y)),
-    };
-  }, [nat, base, box.w, box.h]);
+  // Clamp pan so the rotated footprint never leaves blank inside the box (fill),
+  // and stays centred where it is smaller than the box (fit letterbox).
+  const clampPos = useCallback((p: { x: number; y: number }) => {
+    const maxX = Math.max(0, (footW - box.w) / 2);
+    const maxY = Math.max(0, (footH - box.h) / 2);
+    return { x: Math.max(-maxX, Math.min(maxX, p.x)), y: Math.max(-maxY, Math.min(maxY, p.y)) };
+  }, [footW, footH, box.w, box.h]);
 
-  // Re-clamp position whenever zoom changes
-  useEffect(() => { setPos((p) => clampPos(p, zoom)); }, [zoom, clampPos]);
+  // Re-clamp whenever the transform changes
+  useEffect(() => { setPos((p) => clampPos(p)); }, [zoom, rot, mode, clampPos]);
 
-  // Low-resolution warning: is source big enough for the print box?
+  // Low-resolution warning based on the actually-shown source density
   useEffect(() => {
     if (!nat) return;
-    const needW = box.w * 2; // print target derived below is >= 1600; 2x preview is a soft floor
-    setLowQ(nat.w * base * zoom < needW * 0.6);
+    setLowQ(nat.w * base * zoom < box.w * 2 * 0.6);
   }, [nat, base, zoom, box.w]);
 
   function dist(a: { x: number; y: number }, b: { x: number; y: number }) {
@@ -125,19 +123,17 @@ export default function CropModal({
   function onPointerMove(e: React.PointerEvent) {
     if (!pointers.current.has(e.pointerId)) return;
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
     if (pointers.current.size >= 2 && pinchRef.current) {
       const [a, b] = [...pointers.current.values()];
       const d = dist(a, b);
       if (pinchRef.current.startDist > 0) {
-        const z = Math.max(1, Math.min(maxZoom, pinchRef.current.startZoom * (d / pinchRef.current.startDist)));
-        setZoom(z);
+        setZoom(Math.max(1, Math.min(maxZoom, pinchRef.current.startZoom * (d / pinchRef.current.startDist))));
       }
       return;
     }
     const d = dragRef.current;
     if (!d) return;
-    setPos(clampPos({ x: d.origX + (e.clientX - d.startX), y: d.origY + (e.clientY - d.startY) }, zoom));
+    setPos(clampPos({ x: d.origX + (e.clientX - d.startX), y: d.origY + (e.clientY - d.startY) }));
   }
 
   function onPointerUp(e: React.PointerEvent) {
@@ -145,34 +141,24 @@ export default function CropModal({
     if (pointers.current.size < 2) pinchRef.current = null;
     if (pointers.current.size === 0) dragRef.current = null;
     else if (pointers.current.size === 1) {
-      // remaining finger becomes the drag anchor
       const [only] = [...pointers.current.values()];
       dragRef.current = { startX: only.x, startY: only.y, origX: pos.x, origY: pos.y };
     }
   }
 
-  // Desktop wheel zoom
   function onWheel(e: React.WheelEvent) {
     e.preventDefault();
     setZoom((z) => Math.max(1, Math.min(maxZoom, z - e.deltaY * 0.0015)));
   }
+
+  function rotateBy(delta: number) { setRot((r) => (r + delta + 360) % 360); }
+  function reset() { setZoom(1); setRot(0); setMode("fit"); setPos({ x: 0, y: 0 }); }
 
   async function crop() {
     const img = imgRef.current;
     if (!img || !nat) return;
     setProcessing(true);
     try {
-      // Mirror the on-screen preview EXACTLY: contain (base) into the box,
-      // scale(zoom) around box centre, then pan by pos. Draw in destination
-      // coords so the aspect ratio is never distorted and the visible area
-      // matches the editor 1:1 (letterbox stays white where the image is fit).
-      const dScale = base * zoom;
-      const cW = nat.w * dScale;
-      const cH = nat.h * dScale;
-      const contentLeft = box.w / 2 + pos.x - cW / 2;
-      const contentTop = box.h / 2 + pos.y - cH / 2;
-
-      // Print-quality output: keep box ratio, upscale to a print-safe target
       const outW = Math.round(Math.min(2400, Math.max(1600, box.w * 3)));
       const outScale = outW / box.w;
       const outH = Math.round(box.h * outScale);
@@ -185,13 +171,13 @@ export default function CropModal({
       ctx.fillRect(0, 0, outW, outH);
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(
-        img,
-        contentLeft * outScale,
-        contentTop * outScale,
-        cW * outScale,
-        cH * outScale
-      );
+      // Mirror the on-screen preview EXACTLY: move to box centre + pan, rotate,
+      // then draw the (unrotated) image centred. All in output-scaled coords.
+      ctx.save();
+      ctx.translate((box.w / 2 + pos.x) * outScale, (box.h / 2 + pos.y) * outScale);
+      ctx.rotate((rot * Math.PI) / 180);
+      ctx.drawImage(img, (-iw / 2) * outScale, (-ih / 2) * outScale, iw * outScale, ih * outScale);
+      ctx.restore();
       canvas.toBlob((blob) => {
         setProcessing(false);
         if (!blob) { setErr("Crop fail hua — dobara try karein."); return; }
@@ -202,6 +188,8 @@ export default function CropModal({
       setErr("Crop fail hua — dobara try karein.");
     }
   }
+
+  const toolBtn = "flex items-center justify-center gap-1 rounded-xl py-2 text-xs font-semibold border transition-colors";
 
   return (
     <div
@@ -240,20 +228,20 @@ export default function CropModal({
                   onLoad={(e) => { const t = e.currentTarget; if (t.naturalWidth) setNat({ w: t.naturalWidth, h: t.naturalHeight }); }}
                   className="absolute pointer-events-none"
                   style={{
-                    // Natural-aspect sizing (contain) — identical model to the
-                    // canvas export, so editor and product preview match 1:1.
-                    width: contentW,
-                    height: contentH,
-                    left: (box.w - contentW) / 2 + pos.x,
-                    top: (box.h - contentH) / 2 + pos.y,
+                    // Natural-aspect sizing + rotate about centre — identical model
+                    // to the canvas export, so editor and product preview match 1:1.
+                    width: iw,
+                    height: ih,
+                    left: "50%",
+                    top: "50%",
+                    transform: `translate(-50%, -50%) translate(${pos.x}px, ${pos.y}px) rotate(${rot}deg)`,
                   }}
                 />
               )}
-              {/* subtle grid to signal the crop frame */}
               <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.5)" }} />
             </div>
             {lowQ && (
-              <p className="mt-3 text-[11px] text-amber-300 text-center max-w-xs">⚠️ Photo ki quality print ke liye kam ho sakti hai — zyada zoom na karein.</p>
+              <p className="mt-3 text-xs text-amber-300 text-center max-w-xs">⚠️ Photo ki quality print ke liye kam ho sakti hai — zyada zoom na karein.</p>
             )}
           </>
         )}
@@ -261,7 +249,22 @@ export default function CropModal({
 
       {/* Controls (fixed at bottom on mobile) */}
       <div className="bg-white rounded-t-2xl px-5 pt-4 pb-5 shrink-0" onClick={(e) => e.stopPropagation()}>
-        <p className="text-[12px] text-gray-500 mb-3 text-center">Poori photo dikh rahi hai — drag + zoom se jitna chahe frame mein set karein (kuch apne aap nahi katega)</p>
+        <p className="text-xs text-gray-500 mb-3 text-center">Photo ko drag karein • pinch/scroll ya slider se zoom • ghumane ke liye rotate</p>
+
+        {/* Fit / Fill / Rotate / Reset */}
+        <div className="grid grid-cols-4 gap-2 mb-3">
+          <button
+            onClick={() => setMode("fit")} aria-label="Fit — show full photo" disabled={!!err}
+            className={`${toolBtn} ${mode === "fit" ? "border-orange-500 bg-orange-50 text-orange-600" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+          >⬜ Fit</button>
+          <button
+            onClick={() => setMode("fill")} aria-label="Fill — cover the frame" disabled={!!err}
+            className={`${toolBtn} ${mode === "fill" ? "border-orange-500 bg-orange-50 text-orange-600" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+          >⬛ Fill</button>
+          <button onClick={() => rotateBy(-90)} aria-label="Rotate left" disabled={!!err} className={`${toolBtn} border-gray-200 text-gray-600 hover:bg-gray-50`}>⟲ Left</button>
+          <button onClick={() => rotateBy(90)} aria-label="Rotate right" disabled={!!err} className={`${toolBtn} border-gray-200 text-gray-600 hover:bg-gray-50`}>⟳ Right</button>
+        </div>
+
         <div className="flex items-center gap-3 mb-4">
           <span className="text-xs text-gray-500 shrink-0">Zoom</span>
           <input
@@ -273,11 +276,13 @@ export default function CropModal({
             disabled={!!err}
           />
           <span className="text-xs font-semibold w-10 text-right">{Math.round(zoom * 100)}%</span>
+          <button onClick={reset} aria-label="Reset crop" disabled={!!err} className="text-xs font-semibold text-gray-500 hover:text-orange-600 shrink-0">⟳ Reset</button>
         </div>
+
         <div className="grid grid-cols-2 gap-3">
           <button onClick={onCancel} aria-label="Cancel" className="border border-gray-200 rounded-xl py-3 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
-          <button onClick={crop} disabled={processing || !!err || !nat} aria-label="Crop and use image" className="bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white rounded-xl py-3 text-sm font-bold">
-            {processing ? "Ho raha hai..." : "✓ Crop & Use"}
+          <button onClick={crop} disabled={processing || !!err || !nat} aria-label="Use this photo" className="bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white rounded-xl py-3 text-sm font-bold">
+            {processing ? "Ho raha hai..." : confirmLabel}
           </button>
         </div>
       </div>
