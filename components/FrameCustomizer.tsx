@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ShoppingCart, Upload, Zap, PenLine, X } from "lucide-react";
 import { PriceTag, ProductBadges, AttributePicker, isOutOfStock, variablePrice, findVariation, variationPending, type ExtrasProduct } from "@/components/ProductExtras";
-import CropModal from "@/components/CropModal";
+import CropModal, { type CropTransform } from "@/components/CropModal";
 import ProductGallery from "@/components/ProductGallery";
 import { clipPathCss } from "@/lib/clipShapes";
 
@@ -133,7 +133,7 @@ const FONT_LABELS: Record<string, string> = {
   "'Poppins', sans-serif": "Poppins",
 };
 
-type Overrides = Record<string, { image?: string; text?: string; scale?: number; offX?: number; offY?: number; mirror?: "none" | "h" | "v" }>;
+type Overrides = Record<string, { image?: string; text?: string; scale?: number; offX?: number; offY?: number; mirror?: "none" | "h" | "v"; crop?: CropTransform }>;
 
 function mirrorCss(mirror?: "none" | "h" | "v"): string {
   return mirror === "h" ? " scaleX(-1)" : mirror === "v" ? " scaleY(-1)" : "";
@@ -162,7 +162,10 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
   const outOfStock = isOutOfStock(product) || variation?.stockStatus === "OUT_OF_STOCK";
   const price = variablePrice(product, selectedAttrs);
   const [uploading, setUploading] = useState<string | null>(null);
-  const [cropState, setCropState] = useState<{ file: File; elId: string; aspect: number } | null>(null);
+  const [cropState, setCropState] = useState<{ file: File; elId: string; aspect: number; initial?: CropTransform } | null>(null);
+  // Non-destructive re-edit: keep the ORIGINAL uploaded file (session) per box so
+  // re-opening the crop editor restores the exact previous position/zoom/rotate.
+  const originalFiles = useRef<Record<string, File>>({});
   // Step-by-step customize drawer: 1 = Text/Photo, 2 = Color & Size
   const [step, setStep] = useState(1);
   const [mirrorFinish, setMirrorFinish] = useState<string | null>(null);
@@ -200,17 +203,30 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
   }
 
 
-  async function uploadImage(elId: string, file: File) {
+  async function uploadImage(elId: string, file: File, crop?: CropTransform) {
     setUploading(elId);
     const formData = new FormData();
     formData.append("file", file);
     const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
     const data = await res.json();
     if (res.ok && data.url) {
-      // Cropped image already matches the box ratio → neutral transform (no post-crop nudging)
-      setOverrides((p) => ({ ...p, [elId]: { ...p[elId], image: data.url, scale: 1, offX: 0, offY: 0 } }));
+      // Cropped image already matches the box ratio → neutral transform. `crop`
+      // (editor state) is kept so the crop editor can be reopened as-is.
+      setOverrides((p) => ({ ...p, [elId]: { ...p[elId], image: data.url, scale: 1, offX: 0, offY: 0, crop } }));
     }
     setUploading(null);
+  }
+
+  // Open the crop editor: re-edit the ORIGINAL (restoring last transform) if we
+  // still have it this session, else open the file picker for a fresh upload.
+  function openPhotoEditor(el: FrameElement, forceNew = false) {
+    const aspect = (el.w / el.h) * (opts?.bgAspect || 1);
+    const orig = originalFiles.current[el.id];
+    if (orig && !forceNew) {
+      setCropState({ file: orig, elId: el.id, aspect, initial: overrides[el.id]?.crop });
+    } else {
+      fileRefs.current[el.id]?.click();
+    }
   }
 
   function addToCart(useDefault: boolean) {
@@ -330,7 +346,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
         <div
           key={el.id}
           style={style}
-          onClick={() => customizing && fileRefs.current[el.id]?.click()}
+          onClick={() => customizing && openPhotoEditor(el)}
           className={customizing ? "cursor-pointer" : ""}
         >
           {img ? (
@@ -427,9 +443,12 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
-              // Open the crop editor — position/zoom chosen there, then uploaded.
+              // Fresh photo → keep the ORIGINAL for re-edit, open crop editor clean.
               // aspect = box ratio in canvas space (matches Admin: w/h × bgAspect)
-              if (file) setCropState({ file, elId: el.id, aspect: (el.w / el.h) * (opts?.bgAspect || 1) });
+              if (file) {
+                originalFiles.current[el.id] = file;
+                setCropState({ file, elId: el.id, aspect: (el.w / el.h) * (opts?.bgAspect || 1) });
+              }
               e.target.value = "";
             }}
           />
@@ -646,7 +665,7 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                     <div key={el.id} className="bg-white rounded-2xl shadow-sm p-4">
                       <label className="block text-sm font-semibold text-gray-900 mb-2">📸 {el.label}</label>
                       <button
-                        onClick={() => fileRefs.current[el.id]?.click()}
+                        onClick={() => openPhotoEditor(el)}
                         className="w-full flex items-center gap-3 bg-gray-100 rounded-2xl p-3 text-left hover:bg-amber-50 transition-colors"
                         style={{ border: "none" }}
                       >
@@ -657,9 +676,14 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
                           <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm"><Upload className="w-4 h-4 text-gray-400" /></div>
                         )}
                         <span className="text-sm text-gray-600">
-                          {uploading === el.id ? "Uploading..." : overrides[el.id]?.image ? "Photo lagi ✓ — badalne ke liye tap karo" : `${el.label} — photo lagao`}
+                          {uploading === el.id ? "Uploading..." : overrides[el.id]?.image ? "Photo lagi ✓ — adjust karne ke liye tap karo" : `${el.label} — photo lagao`}
                         </span>
                       </button>
+                      {originalFiles.current[el.id] && (
+                        <button onClick={() => openPhotoEditor(el, true)} className="mt-2 text-xs font-semibold text-orange-600 hover:underline" style={{ border: "none", background: "none" }}>
+                          🔄 Change Photo (nayi photo)
+                        </button>
+                      )}
                     </div>
                   ))}
                   {imageBoxes.length > 0 && (
@@ -888,11 +912,12 @@ export default function FrameCustomizer({ product, templates }: { product: Produ
           file={cropState.file}
           aspect={cropState.aspect}
           confirmLabel="✓ Use This Photo"
+          initial={cropState.initial}
           onCancel={() => setCropState(null)}
-          onDone={(cropped) => {
+          onDone={(cropped, transform) => {
             const elId = cropState.elId;
             setCropState(null);
-            uploadImage(elId, cropped);
+            uploadImage(elId, cropped, transform);
           }}
         />
       )}

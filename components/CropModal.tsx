@@ -9,25 +9,29 @@ import { useState, useRef, useEffect, useCallback } from "react";
 // all supported; only the confirm button rasterises at print resolution.
 //
 // mode="admin" and mode="customer" render the same engine; only labels differ.
+export type CropTransform = { zoom: number; pos: { x: number; y: number }; rot: number; mode: "fit" | "fill" };
+
 export default function CropModal({
   file,
   aspect, // width / height of the target box
   onDone,
   onCancel,
   confirmLabel = "✓ Crop & Use",
+  initial,
 }: {
   file: File;
   aspect: number;
-  onDone: (cropped: File) => void;
+  onDone: (cropped: File, transform: CropTransform) => void;
   onCancel: () => void;
   confirmLabel?: string;
+  initial?: CropTransform; // re-edit: restore previous zoom/pan/rotate/fit
 }) {
   const [imgUrl, setImgUrl] = useState<string | null>(null);
   const [nat, setNat] = useState<{ w: number; h: number } | null>(null);
-  const [zoom, setZoom] = useState(1);
-  const [rot, setRot] = useState(0); // degrees: 0 / 90 / 180 / 270
-  const [mode, setMode] = useState<"fit" | "fill">("fit");
-  const [pos, setPos] = useState({ x: 0, y: 0 }); // px offset of image centre
+  const [zoom, setZoom] = useState(initial?.zoom ?? 1);
+  const [rot, setRot] = useState(initial?.rot ?? 0); // degrees: 0 / 90 / 180 / 270
+  const [mode, setMode] = useState<"fit" | "fill">(initial?.mode ?? "fit");
+  const [pos, setPos] = useState(initial?.pos ?? { x: 0, y: 0 }); // px offset of image centre
   const [box, setBox] = useState({ w: 320, h: 320 });
   const [processing, setProcessing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -181,7 +185,10 @@ export default function CropModal({
       canvas.toBlob((blob) => {
         setProcessing(false);
         if (!blob) { setErr("Crop fail hua — dobara try karein."); return; }
-        onDone(new File([blob], file.name.replace(/\.\w+$/, "") + "-crop.jpg", { type: "image/jpeg" }));
+        onDone(
+          new File([blob], file.name.replace(/\.\w+$/, "") + "-crop.jpg", { type: "image/jpeg" }),
+          { zoom, pos, rot, mode },
+        );
       }, "image/jpeg", 0.92);
     } catch {
       setProcessing(false);
