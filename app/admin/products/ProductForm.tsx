@@ -819,6 +819,7 @@ export default function ProductForm({ categories, product }: { categories: Categ
         <FrameDesigner
           productId={product?.id ?? null}
           productImage={images[0] ?? null}
+          productSlug={product?.slug ?? null}
           onPending={(tpl) => setPendingTemplate(tpl)}
         />
 

@@ -242,7 +242,7 @@ function ColorCodeInput({ onAdd }: { onAdd: (hex: string) => void }) {
 export type PendingTemplate = { name: string; elements: FrameElement[]; bgImage: string | null; options: CustomerOptions };
 
 // productId null = create mode: design locally, product create hone par save hota hai (onPending)
-export default function FrameDesigner({ productId, productImage, onPending }: { productId: string | null; productImage: string | null; onPending?: (tpl: PendingTemplate) => void }) {
+export default function FrameDesigner({ productId, productImage, productSlug, onPending }: { productId: string | null; productImage: string | null; productSlug?: string | null; onPending?: (tpl: PendingTemplate) => void }) {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [elements, setElements] = useState<FrameElement[]>([]);
@@ -1499,6 +1499,50 @@ export default function FrameDesigner({ productId, productImage, onPending }: { 
               })}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* ── Customer Preview — admin sees the exact customer journey (§14) ── */}
+      <div className="mt-6 border border-gray-200 rounded-2xl bg-gradient-to-b from-gray-50 to-white p-5">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <p className="font-bold text-gray-900">👀 Customer Preview</p>
+            <p className="text-xs text-gray-500 mt-0.5">Customer ko bilkul aisa experience milega.</p>
+          </div>
+          <button
+            onClick={() => {
+              if (!productSlug) return;
+              if (dirty && !window.confirm("Unsaved changes hain — preview last SAVED design dikhayega. Pehle Save karna behtar. Aage badhein?")) return;
+              window.open(`/product/${productSlug}`, "_blank", "noopener");
+            }}
+            disabled={!productSlug}
+            className="flex items-center gap-1.5 text-xs font-semibold bg-gray-900 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed text-amber-300 px-4 py-2 rounded-xl transition-colors"
+          >
+            ↗ Preview Customer Experience
+          </button>
+        </div>
+        {!productSlug && <p className="text-xs text-amber-600 mt-2">Pehle product save karo — phir live customer preview khulega.</p>}
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {(() => {
+            const imgN = elements.filter((e) => e.type === "image").length;
+            const txtN = elements.filter((e) => e.type === "text").length;
+            const steps: string[] = [];
+            if (imgN) steps.push("Upload Photo");
+            if (txtN) steps.push("Enter Text");
+            if (options.frameColors.allowed.length) steps.push("Choose Color");
+            if (imgN) steps.push("Adjust Photo (crop / rotate)");
+            steps.push("Live Preview");
+            steps.push("Add to Cart");
+            return steps.map((s, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-full pl-1.5 pr-3 py-1 text-xs text-gray-700">
+                  <span className="w-5 h-5 rounded-full bg-gray-900 text-amber-300 text-[10px] font-bold flex items-center justify-center">{String(i + 1).padStart(2, "0")}</span>
+                  {s}
+                </span>
+                {i < steps.length - 1 && <span className="text-gray-300">→</span>}
+              </div>
+            ));
+          })()}
         </div>
       </div>
 
